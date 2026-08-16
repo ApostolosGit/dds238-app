@@ -13,8 +13,11 @@
     path: "/mqtt"
   };
 
+  const AUTO_REFRESH_MS = 60000;
+
   let client = null;
   let updateTimeout = null;
+  let autoRefreshTimer = null;
   let toastTimeout = null;
   let deferredInstallPrompt = null;
 
@@ -163,8 +166,25 @@
     ui.passwordInput.value = "";
   }
 
+  function stopAutoRefresh() {
+    if (autoRefreshTimer) {
+      clearInterval(autoRefreshTimer);
+      autoRefreshTimer = null;
+    }
+  }
+
+  function scheduleAutoRefresh() {
+    stopAutoRefresh();
+    if (!client || !client.connected) return;
+
+    autoRefreshTimer = setInterval(() => {
+      requestUpdate(false);
+    }, AUTO_REFRESH_MS);
+  }
+
   function disconnect(showMessage = true) {
     clearTimeout(updateTimeout);
+    stopAutoRefresh();
     if (client) {
       try { client.end(true); } catch (_) { /* ignore */ }
     }
@@ -211,19 +231,33 @@
           showToast(`Σφάλμα subscribe: ${err.message || err}`);
           return;
         }
+
         showToast("Συνδέθηκε στο HiveMQ");
+        scheduleAutoRefresh();
+
+        // Μία άμεση μέτρηση κατά τη σύνδεση και μετά αυτόματα κάθε 60 δευτερόλεπτα.
+        setTimeout(() => requestUpdate(false), 300);
       });
       if (ui.settingsDialog.open) ui.settingsDialog.close();
     });
 
     newClient.on("reconnect", () => {
-      if (client === newClient) setBrokerState("warn", "Επανασύνδεση…");
+      if (client === newClient) {
+        stopAutoRefresh();
+        setBrokerState("warn", "Επανασύνδεση…");
+      }
     });
     newClient.on("offline", () => {
-      if (client === newClient) setBrokerState("bad", "Offline");
+      if (client === newClient) {
+        stopAutoRefresh();
+        setBrokerState("bad", "Offline");
+      }
     });
     newClient.on("close", () => {
-      if (client === newClient) setBrokerState("warn", "Αποσυνδεδεμένο");
+      if (client === newClient) {
+        stopAutoRefresh();
+        setBrokerState("warn", "Αποσυνδεδεμένο");
+      }
     });
 
     newClient.on("error", (err) => {
@@ -271,17 +305,26 @@
     ui.updateText.textContent = "ΑΝΑΝΕΩΣΗ";
   }
 
-  function requestUpdate() {
+  function requestUpdate(manual = true) {
     if (!client || !client.connected) {
-      showToast("Δεν υπάρχει σύνδεση με HiveMQ");
+      if (manual) showToast("Δεν υπάρχει σύνδεση με HiveMQ");
       return;
     }
 
-    startUpdateLoading();
+    if (manual) {
+      startUpdateLoading();
+      // Με χειροκίνητη ανανέωση, το επόμενο αυτόματο update θα γίνει 60" αργότερα.
+      scheduleAutoRefresh();
+    }
+
     client.publish(TOPICS.request, "update", { qos: 0, retain: false }, (err) => {
       if (err) {
-        stopUpdateLoading();
-        showToast(`Αποτυχία αποστολής: ${err.message || err}`);
+        if (manual) {
+          stopUpdateLoading();
+          showToast(`Αποτυχία αποστολής: ${err.message || err}`);
+        } else {
+          console.warn("Automatic DDS238 update failed", err);
+        }
       }
     });
   }
@@ -293,7 +336,7 @@
 
   ui.closeSettingsBtn.addEventListener("click", () => ui.settingsDialog.close());
   ui.disconnectBtn.addEventListener("click", () => disconnect(true));
-  ui.updateBtn.addEventListener("click", requestUpdate);
+  ui.updateBtn.addEventListener("click", () => requestUpdate(true));
 
   ui.settingsForm.addEventListener("submit", (event) => {
     event.preventDefault();
