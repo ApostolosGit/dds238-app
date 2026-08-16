@@ -1,4 +1,4 @@
-const CACHE_NAME = "dds238-pwa-v0.1.0";
+const CACHE_NAME = "dds238-pwa-v0.2.0";
 const APP_SHELL = [
   "./",
   "./index.html",
