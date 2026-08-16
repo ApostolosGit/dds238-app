@@ -1,0 +1,182 @@
+<!doctype html>
+<html lang="el">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#0b1320">
+  <meta name="description" content="DDS238 Energy Meter dashboard μέσω HiveMQ MQTT WebSocket">
+  <title>DDS238 Energy Meter</title>
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icon-192.png" sizes="192x192">
+  <link rel="apple-touch-icon" href="icon-192.png">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="app-shell">
+    <header class="topbar">
+      <div>
+        <p class="eyebrow">ENERGY MONITOR</p>
+        <h1>DDS238</h1>
+      </div>
+      <div class="header-actions">
+        <button id="installBtn" class="icon-btn hidden" type="button" title="Εγκατάσταση εφαρμογής" aria-label="Εγκατάσταση εφαρμογής">＋</button>
+        <button id="settingsBtn" class="icon-btn" type="button" title="Ρυθμίσεις σύνδεσης" aria-label="Ρυθμίσεις σύνδεσης">⚙</button>
+      </div>
+    </header>
+
+    <section class="status-strip" aria-label="Κατάσταση σύνδεσης">
+      <div class="status-item">
+        <span id="brokerDot" class="dot dot-warn"></span>
+        <div>
+          <span class="status-label">HiveMQ</span>
+          <strong id="brokerStatus">Αποσυνδεδεμένο</strong>
+        </div>
+      </div>
+      <div class="status-divider"></div>
+      <div class="status-item">
+        <span id="deviceDot" class="dot dot-muted"></span>
+        <div>
+          <span class="status-label">DDS238</span>
+          <strong id="deviceStatus">Άγνωστο</strong>
+        </div>
+      </div>
+    </section>
+
+    <main>
+      <section class="hero-card">
+        <div>
+          <span class="metric-label">Ισχύς τώρα</span>
+          <div class="hero-value"><span id="power">--</span><small>W</small></div>
+        </div>
+        <button id="updateBtn" class="update-btn" type="button" disabled>
+          <span id="updateIcon">↻</span>
+          <span id="updateText">ΑΝΑΝΕΩΣΗ</span>
+        </button>
+      </section>
+
+      <section class="metrics-grid" aria-label="Ηλεκτρικές μετρήσεις">
+        <article class="metric-card">
+          <span class="metric-label">Τάση</span>
+          <strong><span id="voltage">--</span> <small>V</small></strong>
+        </article>
+        <article class="metric-card">
+          <span class="metric-label">Ρεύμα</span>
+          <strong><span id="current">--</span> <small>A</small></strong>
+        </article>
+        <article class="metric-card">
+          <span class="metric-label">Power factor</span>
+          <strong id="pf">--</strong>
+        </article>
+        <article class="metric-card">
+          <span class="metric-label">Συχνότητα</span>
+          <strong><span id="frequency">--</span> <small>Hz</small></strong>
+        </article>
+      </section>
+
+      <section class="section-block">
+        <div class="section-title-row">
+          <h2>Ενέργεια</h2>
+          <span id="deviceDateTime" class="section-meta">Χωρίς μέτρηση</span>
+        </div>
+        <div class="energy-list">
+          <div class="energy-row emphasis">
+            <span>DEH τώρα</span>
+            <strong><span id="dehNow">--</span> <small>kWh</small></strong>
+          </div>
+          <div class="energy-row">
+            <span>DEH reference</span>
+            <strong><span id="dehReference">--</span> <small>kWh</small></strong>
+          </div>
+          <div class="energy-row">
+            <span>Forward</span>
+            <strong><span id="energyFwd">--</span> <small>kWh</small></strong>
+          </div>
+          <div class="energy-row">
+            <span>Reverse</span>
+            <strong><span id="energyRev">--</span> <small>kWh</small></strong>
+          </div>
+          <div class="energy-row">
+            <span>Diff</span>
+            <strong><span id="diff">--</span> <small>kWh</small></strong>
+          </div>
+        </div>
+      </section>
+
+      <section class="info-card">
+        <div>
+          <span class="metric-label">Wi‑Fi RSSI</span>
+          <strong><span id="rssi">--</span> <small>dBm</small></strong>
+        </div>
+        <div class="info-right">
+          <span class="metric-label">Τελευταία λήψη</span>
+          <strong id="lastReceived">--</strong>
+        </div>
+      </section>
+
+      <details class="topics-card">
+        <summary>MQTT Topics</summary>
+        <code>home/energy/dds238/status</code>
+        <code>home/energy/dds238/state</code>
+        <code>home/energy/dds238/request</code>
+      </details>
+    </main>
+
+    <footer>
+      <span>DDS238 Web App v0.1</span>
+      <span>MQTT μέσω HiveMQ WebSocket</span>
+    </footer>
+  </div>
+
+  <dialog id="settingsDialog">
+    <form id="settingsForm" method="dialog">
+      <div class="dialog-head">
+        <div>
+          <p class="eyebrow">HIVEMQ CLOUD</p>
+          <h2>Σύνδεση MQTT</h2>
+        </div>
+        <button id="closeSettingsBtn" class="icon-btn light" type="button" aria-label="Κλείσιμο">×</button>
+      </div>
+
+      <label>
+        Broker host
+        <input id="hostInput" type="text" autocomplete="off" required value="b7e93fa24c0c4c86a995afecd61e93f3.s1.eu.hivemq.cloud">
+      </label>
+
+      <div class="form-grid">
+        <label>
+          WebSocket port
+          <input id="portInput" type="number" inputmode="numeric" required value="8884">
+        </label>
+        <label>
+          Path
+          <input id="pathInput" type="text" required value="/mqtt">
+        </label>
+      </div>
+
+      <label>
+        Username
+        <input id="usernameInput" type="text" autocomplete="username" required placeholder="π.χ. esp-meter">
+      </label>
+
+      <label>
+        Password
+        <input id="passwordInput" type="password" autocomplete="current-password" required placeholder="HiveMQ password">
+      </label>
+
+      <p class="privacy-note">Το password δεν περιλαμβάνεται στα αρχεία της εφαρμογής και δεν αποθηκεύεται μόνιμα.</p>
+
+      <div id="connectionError" class="connection-error hidden" role="alert"></div>
+
+      <div class="dialog-actions">
+        <button id="disconnectBtn" class="secondary-btn" type="button">ΑΠΟΣΥΝΔΕΣΗ</button>
+        <button class="primary-btn" type="submit">ΣΥΝΔΕΣΗ</button>
+      </div>
+    </form>
+  </dialog>
+
+  <div id="toast" class="toast hidden" role="status" aria-live="polite"></div>
+
+  <script src="https://unpkg.com/mqtt@5.15.2/dist/mqtt.min.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
