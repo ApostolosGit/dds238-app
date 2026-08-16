@@ -43,10 +43,10 @@
     </section>
 
     <main>
-      <section class="hero-card">
+      <section class="measurement-toolbar" aria-label="Ανανέωση μετρήσεων">
         <div>
-          <span class="metric-label">Ισχύς τώρα</span>
-          <div class="hero-value"><span id="power">--</span><small>W</small></div>
+          <h2>Ηλεκτρικές μετρήσεις</h2>
+          <span class="section-meta">Αυτόματα κάθε 60″</span>
         </div>
         <button id="updateBtn" class="update-btn" type="button" disabled>
           <span id="updateIcon">↻</span>
@@ -62,6 +62,10 @@
         <article class="metric-card">
           <span class="metric-label">Ρεύμα</span>
           <strong><span id="current">--</span> <small>A</small></strong>
+        </article>
+        <article class="metric-card power-card">
+          <span class="metric-label">Ισχύς τώρα</span>
+          <strong><span id="power">--</span> <small>W</small></strong>
         </article>
         <article class="metric-card">
           <span class="metric-label">Power factor</span>
@@ -79,6 +83,10 @@
           <span id="deviceDateTime" class="section-meta">Χωρίς μέτρηση</span>
         </div>
         <div class="energy-grid">
+          <article class="metric-card energy-card diff-card">
+            <span class="metric-label">Diff</span>
+            <strong><span id="diff">--</span> <small>kWh</small></strong>
+          </article>
           <article class="metric-card energy-card">
             <span class="metric-label">DEH τώρα</span>
             <strong><span id="dehNow">--</span> <small>kWh</small></strong>
@@ -94,10 +102,6 @@
           <article class="metric-card energy-card">
             <span class="metric-label">Reverse</span>
             <strong><span id="energyRev">--</span> <small>kWh</small></strong>
-          </article>
-          <article class="metric-card energy-card">
-            <span class="metric-label">Diff</span>
-            <strong><span id="diff">--</span> <small>kWh</small></strong>
           </article>
         </div>
       </section>
@@ -115,7 +119,7 @@
     </main>
 
     <footer>
-      <span>DDS238 Web App v0.2</span>
+      <span>DDS238 Web App v0.3</span>
       <span>Αυτόματη ανανέωση κάθε 60″</span>
     </footer>
   </div>
