@@ -14,6 +14,8 @@
   };
 
   const AUTO_REFRESH_MS = 60000;
+  const SWIPE_REFRESH_DISTANCE = 80;
+  const SWIPE_MAX_DURATION_MS = 1200;
 
   let client = null;
   let updateTimeout = null;
@@ -22,6 +24,12 @@
   let deferredInstallPrompt = null;
   let appWasHidden = document.hidden;
   let lastForegroundRefreshAt = 0;
+
+  let swipeStartX = null;
+  let swipeStartY = null;
+  let swipeStartAt = 0;
+  let swipeStartedAtTop = false;
+  let swipeStartedAtBottom = false;
 
   const $ = (id) => document.getElementById(id);
 
@@ -344,6 +352,63 @@
     scheduleAutoRefresh();
   }
 
+  function resetSwipeTracking() {
+    swipeStartX = null;
+    swipeStartY = null;
+    swipeStartAt = 0;
+    swipeStartedAtTop = false;
+    swipeStartedAtBottom = false;
+  }
+
+  function isInteractiveSwipeTarget(target) {
+    return Boolean(target && target.closest("button, input, textarea, select, a, label, dialog, form, summary"));
+  }
+
+  function handleTouchStart(event) {
+    if (event.touches.length !== 1 || ui.settingsDialog.open || isInteractiveSwipeTarget(event.target)) {
+      resetSwipeTracking();
+      return;
+    }
+
+    const touch = event.touches[0];
+    const doc = document.documentElement;
+    const maxScrollY = Math.max(0, doc.scrollHeight - window.innerHeight);
+
+    swipeStartX = touch.clientX;
+    swipeStartY = touch.clientY;
+    swipeStartAt = Date.now();
+    swipeStartedAtTop = window.scrollY <= 3;
+    swipeStartedAtBottom = window.scrollY >= maxScrollY - 3;
+  }
+
+  function handleTouchEnd(event) {
+    if (swipeStartX === null || swipeStartY === null || event.changedTouches.length !== 1) {
+      resetSwipeTracking();
+      return;
+    }
+
+    const touch = event.changedTouches[0];
+    const deltaX = touch.clientX - swipeStartX;
+    const deltaY = touch.clientY - swipeStartY;
+    const duration = Date.now() - swipeStartAt;
+    const verticalDistance = Math.abs(deltaY);
+    const horizontalDistance = Math.abs(deltaX);
+
+    const isClearVerticalSwipe =
+      verticalDistance >= SWIPE_REFRESH_DISTANCE &&
+      verticalDistance > horizontalDistance * 1.35 &&
+      duration <= SWIPE_MAX_DURATION_MS;
+
+    const isPullDownFromTop = isClearVerticalSwipe && deltaY > 0 && swipeStartedAtTop;
+    const isPullUpFromBottom = isClearVerticalSwipe && deltaY < 0 && swipeStartedAtBottom;
+
+    resetSwipeTracking();
+
+    if (isPullDownFromTop || isPullUpFromBottom) {
+      requestUpdate(true);
+    }
+  }
+
   ui.settingsBtn.addEventListener("click", () => {
     showConnectionError();
     ui.settingsDialog.showModal();
@@ -376,6 +441,13 @@
       setTimeout(refreshAfterForeground, 150);
     }
   });
+
+  // Swipe-to-refresh χωρίς να συγκρούεται με το native pull-to-refresh του browser.
+  document.documentElement.style.overscrollBehaviorY = "contain";
+  document.body.style.overscrollBehaviorY = "contain";
+  document.addEventListener("touchstart", handleTouchStart, { passive: true });
+  document.addEventListener("touchend", handleTouchEnd, { passive: true });
+  document.addEventListener("touchcancel", resetSwipeTracking, { passive: true });
 
   window.addEventListener("beforeinstallprompt", (event) => {
     event.preventDefault();
