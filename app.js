@@ -20,6 +20,8 @@
   let autoRefreshTimer = null;
   let toastTimeout = null;
   let deferredInstallPrompt = null;
+  let appWasHidden = document.hidden;
+  let lastForegroundRefreshAt = 0;
 
   const $ = (id) => document.getElementById(id);
 
@@ -329,6 +331,19 @@
     });
   }
 
+  function refreshAfterForeground() {
+    const now = Date.now();
+    if (now - lastForegroundRefreshAt < 1500) return;
+    lastForegroundRefreshAt = now;
+
+    if (!client || !client.connected) return;
+
+    // Μόλις η εφαρμογή επιστρέψει στο προσκήνιο, ζητά νέα μέτρηση αμέσως
+    // και ξεκινά ξανά ο κύκλος αυτόματης ανανέωσης των 60 δευτερολέπτων.
+    requestUpdate(false);
+    scheduleAutoRefresh();
+  }
+
   ui.settingsBtn.addEventListener("click", () => {
     showConnectionError();
     ui.settingsDialog.showModal();
@@ -342,6 +357,24 @@
     event.preventDefault();
     const settings = getSettings();
     connect(settings);
+  });
+
+  document.addEventListener("visibilitychange", () => {
+    if (document.hidden) {
+      appWasHidden = true;
+      stopAutoRefresh();
+      return;
+    }
+
+    if (!appWasHidden) return;
+    appWasHidden = false;
+    setTimeout(refreshAfterForeground, 150);
+  });
+
+  window.addEventListener("pageshow", (event) => {
+    if (event.persisted) {
+      setTimeout(refreshAfterForeground, 150);
+    }
   });
 
   window.addEventListener("beforeinstallprompt", (event) => {
