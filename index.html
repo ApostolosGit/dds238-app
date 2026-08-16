@@ -73,32 +73,32 @@
         </article>
       </section>
 
-      <section class="section-block">
+      <section class="energy-section" aria-label="Μετρήσεις ενέργειας">
         <div class="section-title-row">
           <h2>Ενέργεια</h2>
           <span id="deviceDateTime" class="section-meta">Χωρίς μέτρηση</span>
         </div>
-        <div class="energy-list">
-          <div class="energy-row emphasis">
-            <span>DEH τώρα</span>
+        <div class="energy-grid">
+          <article class="metric-card energy-card">
+            <span class="metric-label">DEH τώρα</span>
             <strong><span id="dehNow">--</span> <small>kWh</small></strong>
-          </div>
-          <div class="energy-row">
-            <span>DEH reference</span>
+          </article>
+          <article class="metric-card energy-card">
+            <span class="metric-label">DEH reference</span>
             <strong><span id="dehReference">--</span> <small>kWh</small></strong>
-          </div>
-          <div class="energy-row">
-            <span>Forward</span>
+          </article>
+          <article class="metric-card energy-card">
+            <span class="metric-label">Forward</span>
             <strong><span id="energyFwd">--</span> <small>kWh</small></strong>
-          </div>
-          <div class="energy-row">
-            <span>Reverse</span>
+          </article>
+          <article class="metric-card energy-card">
+            <span class="metric-label">Reverse</span>
             <strong><span id="energyRev">--</span> <small>kWh</small></strong>
-          </div>
-          <div class="energy-row">
-            <span>Diff</span>
+          </article>
+          <article class="metric-card energy-card">
+            <span class="metric-label">Diff</span>
             <strong><span id="diff">--</span> <small>kWh</small></strong>
-          </div>
+          </article>
         </div>
       </section>
 
@@ -112,18 +112,11 @@
           <strong id="lastReceived">--</strong>
         </div>
       </section>
-
-      <details class="topics-card">
-        <summary>MQTT Topics</summary>
-        <code>home/energy/dds238/status</code>
-        <code>home/energy/dds238/state</code>
-        <code>home/energy/dds238/request</code>
-      </details>
     </main>
 
     <footer>
-      <span>DDS238 Web App v0.1</span>
-      <span>MQTT μέσω HiveMQ WebSocket</span>
+      <span>DDS238 Web App v0.2</span>
+      <span>Αυτόματη ανανέωση κάθε 60″</span>
     </footer>
   </div>
 
