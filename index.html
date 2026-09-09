@@ -109,7 +109,7 @@
     </main>
 
     <footer>
-      <span>DDS238 Web App v0.6</span>
+      <span>DDS238 Web App v0.7</span>
       <span>Ανανέωση 60″ · swipe · κουμπί</span>
     </footer>
   </div>
@@ -158,6 +158,32 @@
         <button id="disconnectBtn" class="secondary-btn" type="button">ΑΠΟΣΥΝΔΕΣΗ</button>
         <button class="primary-btn" type="submit">ΣΥΝΔΕΣΗ</button>
       </div>
+
+      <section class="admin-panel" aria-labelledby="adminTitle">
+        <div class="admin-head">
+          <p class="eyebrow">DDS238 ADMIN</p>
+          <h3 id="adminTitle">Διαχείριση DEH</h3>
+        </div>
+
+        <label>
+          Νέα τιμή DEH (kWh)
+          <input id="dehAdminInput" type="number" inputmode="decimal" min="0.01" max="999998.99" step="0.01" placeholder="π.χ. 34650.25">
+        </label>
+
+        <div class="admin-action-grid">
+          <button id="storeDehBtn" class="primary-btn admin-btn" type="button" disabled>STORE</button>
+          <button id="resetStoreDehBtn" class="danger-btn admin-btn" type="button" disabled>RESET + STORE</button>
+        </div>
+
+        <p class="admin-help"><b>Store:</b> αποθηκεύει τη νέα ένδειξη και ξεκινά νέο reference. <b>Reset + Store:</b> διαγράφει daily και drift/calibration history και ξεκινά καθαρά από τη νέα τιμή.</p>
+
+        <div class="admin-action-grid">
+          <button id="exportDailyBtn" class="secondary-btn admin-btn" type="button" disabled>EXPORT DAILY CSV</button>
+          <button id="clearDailyBtn" class="danger-outline-btn admin-btn" type="button" disabled>CLEAR DAILY STATS</button>
+        </div>
+
+        <p id="adminStatus" class="admin-status">Απαιτεί ενεργή σύνδεση MQTT.</p>
+      </section>
     </form>
   </dialog>
 
