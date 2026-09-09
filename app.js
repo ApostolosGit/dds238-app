@@ -4,7 +4,10 @@
   const TOPICS = {
     status: "home/energy/dds238/status",
     state: "home/energy/dds238/state",
-    request: "home/energy/dds238/request"
+    request: "home/energy/dds238/request",
+    adminRequest: "home/energy/dds238/admin/request",
+    adminResponse: "home/energy/dds238/admin/response",
+    adminCsv: "home/energy/dds238/admin/csv"
   };
 
   const DEFAULTS = {
@@ -24,6 +27,10 @@
   let deferredInstallPrompt = null;
   let appWasHidden = document.hidden;
   let lastForegroundRefreshAt = 0;
+  let adminPendingCommand = null;
+  let adminTimeout = null;
+  let csvExportActive = false;
+  let csvRows = [];
 
   let swipeStartX = null;
   let swipeStartY = null;
@@ -50,6 +57,12 @@
     pathInput: $("pathInput"),
     usernameInput: $("usernameInput"),
     passwordInput: $("passwordInput"),
+    dehAdminInput: $("dehAdminInput"),
+    storeDehBtn: $("storeDehBtn"),
+    resetStoreDehBtn: $("resetStoreDehBtn"),
+    exportDailyBtn: $("exportDailyBtn"),
+    clearDailyBtn: $("clearDailyBtn"),
+    adminStatus: $("adminStatus"),
     updateBtn: $("updateBtn"),
     updateText: $("updateText"),
     toast: $("toast")
@@ -78,6 +91,7 @@
     setDot(ui.brokerDot, state);
     ui.brokerStatus.textContent = label;
     ui.updateBtn.disabled = !(client && client.connected);
+    updateAdminControls();
   }
 
   function setDeviceState(value) {
@@ -151,6 +165,167 @@
     ui.connectionError.classList.remove("hidden");
   }
 
+  function setAdminStatus(message, kind = "") {
+    ui.adminStatus.textContent = message;
+    ui.adminStatus.classList.remove("is-ok", "is-error");
+    if (kind) ui.adminStatus.classList.add(`is-${kind}`);
+  }
+
+  function updateAdminControls() {
+    const connected = Boolean(client && client.connected);
+    const busy = Boolean(adminPendingCommand);
+    [ui.storeDehBtn, ui.resetStoreDehBtn, ui.exportDailyBtn, ui.clearDailyBtn].forEach((button) => {
+      button.disabled = !connected || busy;
+    });
+    ui.dehAdminInput.disabled = !connected || busy;
+
+    if (!connected && !busy) {
+      setAdminStatus("Απαιτεί ενεργή σύνδεση MQTT.");
+    } else if (connected && !busy && ui.adminStatus.textContent === "Απαιτεί ενεργή σύνδεση MQTT.") {
+      setAdminStatus("Έτοιμο για απομακρυσμένη διαχείριση.", "ok");
+    }
+  }
+
+  function finishAdminCommand() {
+    clearTimeout(adminTimeout);
+    adminTimeout = null;
+    adminPendingCommand = null;
+    updateAdminControls();
+  }
+
+  function sendAdminCommand(payload, commandName, pendingMessage) {
+    if (!client || !client.connected) {
+      showToast("Δεν υπάρχει σύνδεση με HiveMQ");
+      return;
+    }
+    if (adminPendingCommand) {
+      showToast("Υπάρχει ήδη εντολή σε εξέλιξη");
+      return;
+    }
+
+    adminPendingCommand = commandName;
+    setAdminStatus(pendingMessage);
+    updateAdminControls();
+
+    clearTimeout(adminTimeout);
+    adminTimeout = setTimeout(() => {
+      finishAdminCommand();
+      setAdminStatus("Δεν ήρθε απάντηση από το DDS238.", "error");
+      showToast("Η admin εντολή δεν απάντησε");
+    }, 10000);
+
+    client.publish(TOPICS.adminRequest, payload, { qos: 0, retain: false }, (err) => {
+      if (!err) return;
+      finishAdminCommand();
+      setAdminStatus(`Αποτυχία αποστολής: ${err.message || err}`, "error");
+      showToast("Αποτυχία αποστολής admin εντολής");
+    });
+  }
+
+  function getAdminDehValue() {
+    const raw = ui.dehAdminInput.value.trim();
+    const value = Number(raw);
+    if (!raw || !Number.isFinite(value) || value <= 0 || value >= 999999) {
+      setAdminStatus("Γράψε έγκυρη νέα τιμή DEH.", "error");
+      ui.dehAdminInput.focus();
+      return null;
+    }
+    return raw;
+  }
+
+  function handleAdminResponse(text) {
+    let data;
+    try {
+      data = JSON.parse(text);
+    } catch (_) {
+      finishAdminCommand();
+      setAdminStatus("Μη έγκυρη απάντηση admin από το DDS238.", "error");
+      return;
+    }
+
+    finishAdminCommand();
+
+    if (!data.ok) {
+      const errors = {
+        invalid_deh: "Η τιμή DEH δεν είναι έγκυρη.",
+        dds238_read_failed: "Απέτυχε η ανάγνωση DDS238. Δεν άλλαξε τίποτα.",
+        invalid_command: "Η admin εντολή δεν αναγνωρίστηκε."
+      };
+      const message = errors[data.error] || `Σφάλμα admin: ${data.error || "άγνωστο"}`;
+      setAdminStatus(message, "error");
+      showToast(message);
+      return;
+    }
+
+    if (data.cmd === "store_deh") {
+      const drift = Number.isFinite(Number(data.drift)) ? ` · Drift ${formatNumber(data.drift, 2)} kWh` : "";
+      const message = `DEH ${formatNumber(data.deh, 2)} kWh αποθηκεύτηκε${drift}.`;
+      setAdminStatus(message, "ok");
+      showToast("Νέο DEH reference αποθηκεύτηκε");
+      return;
+    }
+
+    if (data.cmd === "reset_store_deh") {
+      setAdminStatus(`RESET + STORE ολοκληρώθηκε: ${formatNumber(data.deh, 2)} kWh.`, "ok");
+      showToast("RESET + STORE ολοκληρώθηκε");
+      return;
+    }
+
+    if (data.cmd === "clear_daily") {
+      setAdminStatus("Τα daily stats καθαρίστηκαν. Το drift history διατηρήθηκε.", "ok");
+      showToast("Daily stats καθαρίστηκαν");
+      return;
+    }
+
+    if (data.cmd === "export_daily") {
+      setAdminStatus(`Export ολοκληρώθηκε (${Number(data.rows) || 0} εγγραφές).`, "ok");
+    }
+  }
+
+  function downloadDailyCsv() {
+    if (!csvRows.length) {
+      setAdminStatus("Το CSV δεν περιείχε δεδομένα.", "error");
+      return;
+    }
+
+    const content = `\uFEFF${csvRows.join("\r\n")}\r\n`;
+    const blob = new Blob([content], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    const date = new Date().toISOString().slice(0, 10);
+    link.href = url;
+    link.download = `dds238_daily_stats_${date}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+    showToast("Το Daily CSV κατέβηκε");
+  }
+
+  function handleAdminCsv(text) {
+    if (text.startsWith("BEGIN|")) {
+      csvExportActive = true;
+      csvRows = [];
+      setAdminStatus("Λήψη Daily CSV…");
+      return;
+    }
+
+    if (text.startsWith("ROW|") && csvExportActive) {
+      const separator = text.indexOf("|", 4);
+      if (separator >= 0) csvRows.push(text.slice(separator + 1));
+      return;
+    }
+
+    if (text === "END" && csvExportActive) {
+      csvExportActive = false;
+      downloadDailyCsv();
+      if (adminPendingCommand === "export_daily") {
+        finishAdminCommand();
+        setAdminStatus("Το Daily CSV δημιουργήθηκε.", "ok");
+      }
+    }
+  }
+
   function getSettings() {
     return {
       host: ui.hostInput.value.trim(),
@@ -194,6 +369,11 @@
 
   function disconnect(showMessage = true) {
     clearTimeout(updateTimeout);
+    clearTimeout(adminTimeout);
+    adminTimeout = null;
+    adminPendingCommand = null;
+    csvExportActive = false;
+    csvRows = [];
     stopAutoRefresh();
     if (client) {
       try { client.end(true); } catch (_) { /* ignore */ }
@@ -236,7 +416,7 @@
       if (client !== newClient) return;
       setBrokerState("good", "Συνδεδεμένο");
       showConnectionError();
-      newClient.subscribe([TOPICS.status, TOPICS.state], { qos: 0 }, (err) => {
+      newClient.subscribe([TOPICS.status, TOPICS.state, TOPICS.adminResponse, TOPICS.adminCsv], { qos: 0 }, (err) => {
         if (err) {
           showToast(`Σφάλμα subscribe: ${err.message || err}`);
           return;
@@ -295,6 +475,15 @@
           showToast("Το state μήνυμα δεν είναι έγκυρο JSON");
           console.error("Invalid DDS238 JSON", text, err);
         }
+      }
+
+      if (topic === TOPICS.adminResponse) {
+        handleAdminResponse(text);
+        return;
+      }
+
+      if (topic === TOPICS.adminCsv) {
+        handleAdminCsv(text);
       }
     });
   }
@@ -418,6 +607,32 @@
   ui.disconnectBtn.addEventListener("click", () => disconnect(true));
   ui.updateBtn.addEventListener("click", () => requestUpdate(true));
 
+  ui.storeDehBtn.addEventListener("click", () => {
+    const value = getAdminDehValue();
+    if (value === null) return;
+    sendAdminCommand(`store_deh|${value}`, "store_deh", "Αποθήκευση νέου DEH reference…");
+  });
+
+  ui.resetStoreDehBtn.addEventListener("click", () => {
+    const value = getAdminDehValue();
+    if (value === null) return;
+    const ok = window.confirm("RESET + STORE θα διαγράψει ΟΛΑ τα daily stats και το drift/calibration history και θα ξεκινήσει καθαρά από τη νέα τιμή DEH. Συνέχεια;");
+    if (!ok) return;
+    sendAdminCommand(`reset_store_deh|${value}`, "reset_store_deh", "RESET + STORE σε εξέλιξη…");
+  });
+
+  ui.exportDailyBtn.addEventListener("click", () => {
+    csvExportActive = false;
+    csvRows = [];
+    sendAdminCommand("export_daily", "export_daily", "Προετοιμασία Daily CSV…");
+  });
+
+  ui.clearDailyBtn.addEventListener("click", () => {
+    const ok = window.confirm("Να καθαριστούν μόνο τα daily statistics; Το Register/drift history θα παραμείνει.");
+    if (!ok) return;
+    sendAdminCommand("clear_daily", "clear_daily", "Καθαρισμός daily stats…");
+  });
+
   ui.settingsForm.addEventListener("submit", (event) => {
     event.preventDefault();
     const settings = getSettings();
@@ -480,6 +695,7 @@
   restoreSettings();
   setBrokerState("warn", "Αποσυνδεδεμένο");
   setDeviceState("");
+  updateAdminControls();
 
   // Το password δεν αποθηκεύεται μόνιμα, επομένως οι ρυθμίσεις
   // ανοίγουν σε κάθε νέο άνοιγμα της εφαρμογής για ασφαλή σύνδεση.
