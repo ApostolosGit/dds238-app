@@ -4,8 +4,8 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="theme-color" content="#0b1320">
-  <meta name="description" content="DDS238 Energy Meter dashboard μέσω HiveMQ MQTT WebSocket">
-  <title>DDS238 Energy Meter</title>
+  <meta name="description" content="Energy DDS / JSY dashboard μέσω HiveMQ MQTT WebSocket">
+  <title>Energy DDS / JSY</title>
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="icon" href="icon-192.png" sizes="192x192">
   <link rel="apple-touch-icon" href="icon-192.png">
@@ -14,11 +14,14 @@
 <body>
   <div class="app-shell">
     <header class="topbar">
-      <h1>DDS238</h1>
+      <div>
+        <p class="eyebrow app-eyebrow">ENERGY MONITOR</p>
+        <h1>Energy DDS / JSY</h1>
+      </div>
       <div class="header-actions">
-        <button id="updateBtn" class="update-btn compact-update" type="button" disabled>
-          <span id="updateIcon">↻</span>
-          <span id="updateText">ΑΝΑΝΕΩΣΗ</span>
+        <button id="updateAllBtn" class="update-btn compact-update" type="button" disabled>
+          <span id="updateAllIcon">↻</span>
+          <span id="updateAllText">ΟΛΑ</span>
         </button>
         <button id="installBtn" class="icon-btn hidden" type="button" title="Εγκατάσταση εφαρμογής" aria-label="Εγκατάσταση εφαρμογής">＋</button>
         <button id="settingsBtn" class="icon-btn" type="button" title="Ρυθμίσεις σύνδεσης" aria-label="Ρυθμίσεις σύνδεσης">⚙</button>
@@ -35,82 +38,26 @@
       </div>
       <div class="status-divider"></div>
       <div class="status-item">
-        <span id="deviceDot" class="dot dot-muted"></span>
+        <span id="metersDot" class="dot dot-muted"></span>
         <div>
-          <span class="status-label">DDS238</span>
-          <strong id="deviceStatus">Άγνωστο</strong>
+          <span class="status-label">Μετρητές online</span>
+          <strong id="metersStatus">0</strong>
         </div>
       </div>
     </section>
 
     <main>
-      <section class="metrics-grid" aria-label="Ηλεκτρικές μετρήσεις">
-        <article class="metric-card power-card">
-          <span class="metric-label">Ισχύς τώρα</span>
-          <strong><span id="power">--</span> <small>W</small></strong>
-        </article>
-        <article class="metric-card">
-          <span class="metric-label">Τάση</span>
-          <strong><span id="voltage">--</span> <small>V</small></strong>
-        </article>
-        <article class="metric-card">
-          <span class="metric-label">Ρεύμα</span>
-          <strong><span id="current">--</span> <small>A</small></strong>
-        </article>
-        <article class="metric-card">
-          <span class="metric-label">Power factor</span>
-          <strong id="pf">--</strong>
-        </article>
-        <article class="metric-card">
-          <span class="metric-label">Συχνότητα</span>
-          <strong><span id="frequency">--</span> <small>Hz</small></strong>
-        </article>
+      <section id="emptyState" class="empty-state">
+        <strong>Δεν υπάρχει online μετρητής.</strong>
+        <span>Συνδέσου στο HiveMQ και η εφαρμογή θα εμφανίσει αυτόματα DDS238 / JSY-MK-333 που είναι online.</span>
       </section>
 
-      <section class="energy-section" aria-label="Μετρήσεις ενέργειας">
-        <div class="section-title-row">
-          <h2>Ενέργεια</h2>
-          <span id="deviceDateTime" class="section-meta">Χωρίς μέτρηση</span>
-        </div>
-        <div class="energy-grid">
-          <article class="metric-card energy-card diff-card">
-            <span class="metric-label">Diff</span>
-            <strong><span id="diff">--</span> <small>kWh</small></strong>
-          </article>
-          <article class="metric-card energy-card">
-            <span class="metric-label">DEH τώρα</span>
-            <strong><span id="dehNow">--</span> <small>kWh</small></strong>
-          </article>
-          <article class="metric-card energy-card">
-            <span class="metric-label">DEH reference</span>
-            <strong><span id="dehReference">--</span> <small>kWh</small></strong>
-          </article>
-          <article class="metric-card energy-card">
-            <span class="metric-label">Forward</span>
-            <strong><span id="energyFwd">--</span> <small>kWh</small></strong>
-          </article>
-          <article class="metric-card energy-card">
-            <span class="metric-label">Reverse</span>
-            <strong><span id="energyRev">--</span> <small>kWh</small></strong>
-          </article>
-        </div>
-      </section>
-
-      <section class="info-card">
-        <div>
-          <span class="metric-label">Wi‑Fi RSSI</span>
-          <strong><span id="rssi">--</span> <small>dBm</small></strong>
-        </div>
-        <div class="info-right">
-          <span class="metric-label">Τελευταία λήψη</span>
-          <strong id="lastReceived">--</strong>
-        </div>
-      </section>
+      <section id="devicesGrid" class="devices-grid" aria-live="polite"></section>
     </main>
 
     <footer>
-      <span>DDS238 Web App v0.7</span>
-      <span>Ανανέωση 60″ · swipe · κουμπί</span>
+      <span>Energy DDS / JSY v1.0</span>
+      <span>Auto discovery · MQTT wildcard · refresh 60″</span>
     </footer>
   </div>
 
@@ -151,40 +98,44 @@
       </label>
 
       <p class="privacy-note">Το password δεν περιλαμβάνεται στα αρχεία της εφαρμογής και δεν αποθηκεύεται μόνιμα.</p>
-
       <div id="connectionError" class="connection-error hidden" role="alert"></div>
 
       <div class="dialog-actions">
         <button id="disconnectBtn" class="secondary-btn" type="button">ΑΠΟΣΥΝΔΕΣΗ</button>
         <button class="primary-btn" type="submit">ΣΥΝΔΕΣΗ</button>
       </div>
-
-      <section class="admin-panel" aria-labelledby="adminTitle">
-        <div class="admin-head">
-          <p class="eyebrow">DDS238 ADMIN</p>
-          <h3 id="adminTitle">Διαχείριση DEH</h3>
-        </div>
-
-        <label>
-          Νέα τιμή DEH (kWh)
-          <input id="dehAdminInput" type="number" inputmode="decimal" min="0.01" max="999998.99" step="0.01" placeholder="π.χ. 34650.25">
-        </label>
-
-        <div class="admin-action-grid">
-          <button id="storeDehBtn" class="primary-btn admin-btn" type="button" disabled>STORE</button>
-          <button id="resetStoreDehBtn" class="danger-btn admin-btn" type="button" disabled>RESET + STORE</button>
-        </div>
-
-        <p class="admin-help"><b>Store:</b> αποθηκεύει τη νέα ένδειξη και ξεκινά νέο reference. <b>Reset + Store:</b> διαγράφει daily και drift/calibration history και ξεκινά καθαρά από τη νέα τιμή.</p>
-
-        <div class="admin-action-grid">
-          <button id="exportDailyBtn" class="secondary-btn admin-btn" type="button" disabled>EXPORT DAILY CSV</button>
-          <button id="clearDailyBtn" class="danger-outline-btn admin-btn" type="button" disabled>CLEAR DAILY STATS</button>
-        </div>
-
-        <p id="adminStatus" class="admin-status">Απαιτεί ενεργή σύνδεση MQTT.</p>
-      </section>
     </form>
+  </dialog>
+
+  <dialog id="adminDialog">
+    <div class="admin-dialog-body">
+      <div class="dialog-head">
+        <div>
+          <p id="adminEyebrow" class="eyebrow">METER ADMIN</p>
+          <h2 id="adminTitle">Διαχείριση</h2>
+        </div>
+        <button id="closeAdminBtn" class="icon-btn light" type="button" aria-label="Κλείσιμο">×</button>
+      </div>
+
+      <label>
+        Νέα τιμή DEH (kWh)
+        <input id="dehAdminInput" type="number" inputmode="decimal" min="0.01" max="999998.99" step="0.01" placeholder="π.χ. 34650.25">
+      </label>
+
+      <div class="admin-action-grid">
+        <button id="storeDehBtn" class="primary-btn admin-btn" type="button">STORE</button>
+        <button id="resetStoreDehBtn" class="danger-btn admin-btn" type="button">RESET + STORE</button>
+      </div>
+
+      <p class="admin-help"><b>Store:</b> νέο reference. <b>Reset + Store:</b> διαγράφει daily και drift/calibration history και ξεκινά καθαρά.</p>
+
+      <div class="admin-action-grid">
+        <button id="exportDailyBtn" class="secondary-btn admin-btn" type="button">EXPORT DAILY CSV</button>
+        <button id="clearDailyBtn" class="danger-outline-btn admin-btn" type="button">CLEAR DAILY STATS</button>
+      </div>
+
+      <p id="adminStatus" class="admin-status">Έτοιμο.</p>
+    </div>
   </dialog>
 
   <div id="toast" class="toast hidden" role="status" aria-live="polite"></div>
