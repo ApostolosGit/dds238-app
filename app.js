@@ -826,6 +826,10 @@
     });
   }
 
+  const footerSpans = document.querySelectorAll("footer span");
+  if (footerSpans[0]) footerSpans[0].textContent = "Energy DDS / JSY v1.1";
+  if (footerSpans[1]) footerSpans[1].textContent = "Auto discovery · Z1/Z2 · refresh 60″";
+
   restoreSettings();
   renderAll();
   setBrokerState("warn", "Αποσυνδεδεμένο");
