@@ -1,7 +1,7 @@
 {
   "name": "Energy DDS / JSY",
   "short_name": "Energy",
-  "description": "Multi-meter DDS238 / JSY-MK-333 dashboard μέσω HiveMQ MQTT WebSocket",
+  "description": "Multi-meter DDS238 / JSY-MK-333 dashboard με προαιρετικό διζωνικό Ζ1/Ζ2 μέσω HiveMQ MQTT WebSocket",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",
