@@ -10,7 +10,7 @@
   ];
 
   const DEFAULTS = {
-    host: "b7e93fa24c0c4c86a995afecd61e93f3.s1.eu.hivemq.cloud",
+    host: "",
     port: "8884",
     path: "/mqtt"
   };
@@ -62,6 +62,83 @@
     adminStatus: $("adminStatus"),
     toast: $("toast")
   };
+
+  function injectDualZoneUi() {
+    if ($("dualZoneSettings")) return;
+
+    const section = document.createElement("section");
+    section.id = "dualZoneSettings";
+    section.className = "settings-section dual-zone-settings";
+    section.innerHTML = `
+      <div class="setting-toggle-row">
+        <div>
+          <p class="eyebrow">ΔΙΖΩΝΙΚΟ</p>
+          <h3>Μετρητές Ζ1 / Ζ2</h3>
+        </div>
+        <label class="switch-label">
+          <input id="dualZoneToggle" type="checkbox">
+          <span>Ενεργό</span>
+        </label>
+      </div>
+
+      <p id="dualZoneUnsupported" class="admin-help hidden">
+        Ο συγκεκριμένος ESP δεν αναφέρει υποστήριξη Ζ1/Ζ2. Απαιτεί firmware 1.16 ή νεότερο.
+      </p>
+
+      <div id="dualZoneDetails" class="hidden">
+        <div class="tariff-schedule">
+          <strong>Ωράριο Διζωνικού Συστήματος</strong>
+          <p><b>Ζ1:</b> ακριβή ζώνη · όλες οι ώρες εκτός Ζ2.</p>
+          <p><b>Ζ2:</b> φθηνή ζώνη.</p>
+          <div class="schedule-grid">
+            <div>
+              <b>Χειμερινή περίοδος</b>
+              <span>Νοέμβριος – Μάρτιος</span>
+              <span>02:00 – 05:00</span>
+              <span>12:00 – 15:00</span>
+            </div>
+            <div>
+              <b>Θερινή περίοδος</b>
+              <span>Απρίλιος – Οκτώβριος</span>
+              <span>02:00 – 04:00</span>
+              <span>11:00 – 15:00</span>
+            </div>
+          </div>
+          <a href="https://apps.deddie.gr/ccrWebapp/dizoniko.html" target="_blank" rel="noopener noreferrer">Πηγή ωραρίου: ΔΕΔΔΗΕ</a>
+        </div>
+
+        <div class="form-grid">
+          <label>
+            Ζ1 — ακριβή (kWh)
+            <input id="z1Input" type="number" inputmode="decimal" min="0" max="999998.99" step="0.01">
+          </label>
+          <label>
+            Ζ2 — φθηνή (kWh)
+            <input id="z2Input" type="number" inputmode="decimal" min="0" max="999998.99" step="0.01">
+          </label>
+        </div>
+
+        <p class="admin-help">
+          Οι τιμές Ζ1/Ζ2 είναι οι πραγματικές ενδείξεις από τις οποίες θέλεις να συνεχίσει η καταμέτρηση.
+        </p>
+      </div>
+
+      <button id="saveDualZoneBtn" class="primary-btn admin-btn full-btn" type="button">
+        ΑΠΟΘΗΚΕΥΣΗ ΔΙΖΩΝΙΚΟΥ
+      </button>
+    `;
+
+    ui.adminStatus.parentNode.insertBefore(section, ui.adminStatus);
+  }
+
+  injectDualZoneUi();
+
+  ui.dualZoneToggle = $("dualZoneToggle");
+  ui.dualZoneDetails = $("dualZoneDetails");
+  ui.dualZoneUnsupported = $("dualZoneUnsupported");
+  ui.z1Input = $("z1Input");
+  ui.z2Input = $("z2Input");
+  ui.saveDualZoneBtn = $("saveDualZoneBtn");
 
   function escapeHtml(value) {
     return String(value ?? "")
@@ -178,6 +255,29 @@
       </article>`;
   }
 
+  function renderDualZone(state) {
+    if (state.dual_zone !== true) return "";
+
+    const zone = String(state.tariff_zone || "-");
+    const isZ2 = zone === "Z2";
+    const clock = state.clock_source === "internal" ? "εσωτερικό ρολόι" :
+                  state.clock_source === "ntp/internal" ? "NTP / εσωτερικό" :
+                  "χωρίς έγκυρη ώρα";
+
+    return `
+      <section class="tariff-dashboard">
+        <div class="section-title-row">
+          <h3>Διζωνικό</h3>
+          <span class="zone-now ${isZ2 ? "cheap" : "normal"}">Τώρα ${escapeHtml(zone)}</span>
+        </div>
+        <div class="tariff-grid">
+          ${metric("Ζ1 · ακριβή", formatNumber(state.z1, 2), "kWh")}
+          ${metric("Ζ2 · φθηνή", formatNumber(state.z2, 2), "kWh", "cheap-card")}
+        </div>
+        <div class="tariff-meta">Ρολόι: ${escapeHtml(clock)}</div>
+      </section>`;
+  }
+
   function renderDdsBody(device) {
     const s = device.state;
     return `
@@ -200,7 +300,8 @@
           ${metric("Forward", formatNumber(s.energy_fwd, 2), "kWh")}
           ${metric("Reverse", formatNumber(s.energy_rev, 2), "kWh")}
         </div>
-      </section>`;
+      </section>
+      ${renderDualZone(s)}`;
   }
 
   function renderJsyBody(device) {
@@ -247,7 +348,8 @@
           ${metric("DEH reference", formatNumber(s.deh_reference, 2), "kWh")}
           ${metric("RSSI", formatNumber(s.rssi, 0), "dBm")}
         </div>
-      </section>`;
+      </section>
+      ${renderDualZone(s)}`;
   }
 
   function renderDevice(device) {
@@ -272,7 +374,7 @@
           </div>
           <div class="device-actions">
             <button class="small-btn refresh-device" type="button" data-action="refresh" data-device="${escapeHtml(device.id)}">↻ UPDATE</button>
-            <button class="small-btn ghost" type="button" data-action="admin" data-device="${escapeHtml(device.id)}">ADMIN</button>
+            <button class="small-btn ghost" type="button" data-action="admin" data-device="${escapeHtml(device.id)}">ΡΥΘΜΙΣΕΙΣ</button>
           </div>
         </div>
         ${body}
@@ -333,13 +435,29 @@
     autoRefreshTimer = setInterval(() => requestAll(false), AUTO_REFRESH_MS);
   }
 
+  function refreshDualZoneSettings(device) {
+    const s = device.state || {};
+    const supported = Object.prototype.hasOwnProperty.call(s, "dual_zone");
+
+    ui.dualZoneUnsupported.classList.toggle("hidden", supported);
+    ui.dualZoneToggle.disabled = !supported;
+    ui.saveDualZoneBtn.disabled = !supported;
+    ui.dualZoneToggle.checked = supported && s.dual_zone === true;
+
+    ui.z1Input.value = Number.isFinite(Number(s.z1)) ? Number(s.z1).toFixed(2) : "";
+    ui.z2Input.value = Number.isFinite(Number(s.z2)) ? Number(s.z2).toFixed(2) : "";
+
+    ui.dualZoneDetails.classList.toggle("hidden", !ui.dualZoneToggle.checked);
+  }
+
   function openAdmin(id) {
     const device = devices.get(id);
     if (!device) return;
     adminTargetId = id;
-    ui.adminEyebrow.textContent = `${meterName(device)} ADMIN`;
-    ui.adminTitle.textContent = `Διαχείριση · ${id}`;
+    ui.adminEyebrow.textContent = `${meterName(device)} SETTINGS`;
+    ui.adminTitle.textContent = `Ρυθμίσεις · ${id}`;
     ui.dehAdminInput.value = "";
+    refreshDualZoneSettings(device);
     setAdminStatus("Έτοιμο.", "ok");
     updateAdminButtons();
     ui.adminDialog.showModal();
@@ -353,10 +471,18 @@
 
   function updateAdminButtons() {
     const busy = adminTargetId && adminBusy.has(adminTargetId);
+    const connected = Boolean(client && client.connected);
     [ui.storeDehBtn, ui.resetStoreDehBtn, ui.exportDailyBtn, ui.clearDailyBtn].forEach((b) => {
-      b.disabled = !adminTargetId || busy || !client || !client.connected;
+      b.disabled = !adminTargetId || busy || !connected;
     });
-    ui.dehAdminInput.disabled = !adminTargetId || busy || !client || !client.connected;
+    ui.dehAdminInput.disabled = !adminTargetId || busy || !connected;
+
+    const device = adminTargetId ? devices.get(adminTargetId) : null;
+    const supportsDual = Boolean(device && Object.prototype.hasOwnProperty.call(device.state || {}, "dual_zone"));
+    ui.dualZoneToggle.disabled = !supportsDual || busy || !connected;
+    ui.saveDualZoneBtn.disabled = !supportsDual || busy || !connected;
+    ui.z1Input.disabled = !supportsDual || busy || !connected;
+    ui.z2Input.disabled = !supportsDual || busy || !connected;
   }
 
   function adminDehValue() {
@@ -395,15 +521,24 @@
       return;
     }
 
+    const errorMessages = {
+      invalid_z_values: "Οι τιμές Ζ1/Ζ2 δεν είναι έγκυρες.",
+      time_not_valid: "Ο ESP δεν έχει ακόμα έγκυρη ημερομηνία/ώρα από NTP.",
+      dds238_read_failed: "Απέτυχε η ανάγνωση DDS238.",
+      jsy_read_failed: "Απέτυχε η ανάγνωση JSY-MK-333."
+    };
+
     const ok = Boolean(data.ok);
     const msg = ok
       ? `OK: ${data.cmd || "admin"}`
-      : `Σφάλμα: ${data.error || "άγνωστο"}`;
+      : (errorMessages[data.error] || `Σφάλμα: ${data.error || "άγνωστο"}`);
 
     if (adminTargetId === id) setAdminStatus(msg, ok ? "ok" : "error");
     showToast(`${id}: ${msg}`);
 
-    if (ok && (data.cmd === "store_deh" || data.cmd === "reset_store_deh")) {
+    if (ok && (data.cmd === "store_deh" ||
+               data.cmd === "reset_store_deh" ||
+               data.cmd === "dualzone_set")) {
       setTimeout(() => requestUpdate(id, false), 250);
     }
   }
@@ -447,7 +582,7 @@
   }
 
   function restoreSettings() {
-    ui.hostInput.value = localStorage.getItem("energy.host") || DEFAULTS.host;
+    ui.hostInput.value = localStorage.getItem("energy.host") || ui.hostInput.value || DEFAULTS.host;
     ui.portInput.value = localStorage.getItem("energy.port") || DEFAULTS.port;
     ui.pathInput.value = localStorage.getItem("energy.path") || DEFAULTS.path;
     ui.usernameInput.value = localStorage.getItem("energy.username") || "";
@@ -554,6 +689,11 @@
           device.lastReceived = new Date();
           device.online = true;
           renderAll();
+
+          if (adminTargetId === device.id && ui.adminDialog.open) {
+            refreshDualZoneSettings(device);
+            updateAdminButtons();
+          }
         } catch (err) {
           console.error("Invalid meter JSON", parsed.id, text, err);
           showToast(`${parsed.id}: μη έγκυρο JSON`);
@@ -622,6 +762,40 @@
   ui.clearDailyBtn.addEventListener("click", () => {
     if (!window.confirm("Να καθαριστούν μόνο τα daily statistics;")) return;
     sendAdmin("clear_daily", "Καθαρισμός daily stats…");
+  });
+
+  ui.dualZoneToggle.addEventListener("change", () => {
+    ui.dualZoneDetails.classList.toggle("hidden", !ui.dualZoneToggle.checked);
+  });
+
+  ui.saveDualZoneBtn.addEventListener("click", () => {
+    if (!adminTargetId) return;
+
+    const device = devices.get(adminTargetId);
+    if (!device || !Object.prototype.hasOwnProperty.call(device.state || {}, "dual_zone")) {
+      setAdminStatus("Απαιτεί firmware 1.16 ή νεότερο.", "error");
+      return;
+    }
+
+    const enabled = ui.dualZoneToggle.checked;
+    let z1 = Number(ui.z1Input.value);
+    let z2 = Number(ui.z2Input.value);
+
+    if (!enabled) {
+      z1 = Number.isFinite(z1) ? z1 : Number(device.state.z1 || 0);
+      z2 = Number.isFinite(z2) ? z2 : Number(device.state.z2 || 0);
+    }
+
+    if (!Number.isFinite(z1) || !Number.isFinite(z2) ||
+        z1 < 0 || z2 < 0 || z1 >= 999999 || z2 >= 999999) {
+      setAdminStatus("Γράψε έγκυρες τιμές Ζ1 και Ζ2.", "error");
+      return;
+    }
+
+    sendAdmin(
+      `dualzone_set|${enabled ? 1 : 0}|${z1.toFixed(2)}|${z2.toFixed(2)}`,
+      enabled ? "Ενεργοποίηση διζωνικού…" : "Απενεργοποίηση διζωνικού…"
+    );
   });
 
   window.addEventListener("beforeinstallprompt", (event) => {
