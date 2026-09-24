@@ -517,7 +517,7 @@
 
     ui.dualZoneDetails.classList.toggle("hidden", !dual);
     if (ui.monoZoneSettings) ui.monoZoneSettings.classList.toggle("hidden", dual);
-    ui.saveDualZoneBtn.textContent = dual ? "ΑΠΟΘΗΚΕΥΣΗ Ζ1 / Ζ2" : "ΑΠΟΘΗΚΕΥΣΗ ΜΟΝΟΖΩΝΙΚΟΥ";
+    ui.saveDualZoneBtn.textContent = dual ? "ΑΠΟΘΗΚΕΥΣΗ Ζ1 / Ζ2" : "ΑΠΟΘΗΚΕΥΣΗ ΡΥΘΜΙΣΗΣ";
   }
 
   function openAdmin(id) {
@@ -837,7 +837,7 @@
     const enabled = ui.dualZoneToggle.checked;
     ui.dualZoneDetails.classList.toggle("hidden", !enabled);
     if (ui.monoZoneSettings) ui.monoZoneSettings.classList.toggle("hidden", enabled);
-    ui.saveDualZoneBtn.textContent = enabled ? "ΑΠΟΘΗΚΕΥΣΗ Ζ1 / Ζ2" : "ΑΠΟΘΗΚΕΥΣΗ ΜΟΝΟΖΩΝΙΚΟΥ";
+    ui.saveDualZoneBtn.textContent = enabled ? "ΑΠΟΘΗΚΕΥΣΗ Ζ1 / Ζ2" : "ΑΠΟΘΗΚΕΥΣΗ ΡΥΘΜΙΣΗΣ";
   });
 
   ui.saveDualZoneBtn.addEventListener("click", () => {
