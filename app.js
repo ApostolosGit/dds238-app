@@ -905,15 +905,42 @@
   });
 
   if ("serviceWorker" in navigator) {
+    const hadServiceWorkerController = Boolean(navigator.serviceWorker.controller);
+    let reloadingForAppUpdate = false;
+
+    navigator.serviceWorker.addEventListener("controllerchange", () => {
+      if (!hadServiceWorkerController || reloadingForAppUpdate) return;
+      reloadingForAppUpdate = true;
+      window.location.reload();
+    });
+
     window.addEventListener("load", () => {
-      navigator.serviceWorker.register("./sw.js").catch((err) => {
-        console.warn("Service worker registration failed", err);
-      });
+      navigator.serviceWorker.register("./sw.js", { updateViaCache: "none" })
+        .then((registration) => {
+          const checkForAppUpdate = () => {
+            registration.update().catch((err) => {
+              console.warn("Service worker update check failed", err);
+            });
+          };
+
+          // Έλεγχος αμέσως σε κάθε άνοιγμα και περιοδικά όσο το app μένει ανοιχτό.
+          checkForAppUpdate();
+          setInterval(checkForAppUpdate, 5 * 60 * 1000);
+
+          // Αν το κινητό επιστρέψει στο app μετά από ώρα, ελέγχουμε αμέσως.
+          document.addEventListener("visibilitychange", () => {
+            if (document.visibilityState === "visible") checkForAppUpdate();
+          });
+          window.addEventListener("focus", checkForAppUpdate);
+        })
+        .catch((err) => {
+          console.warn("Service worker registration failed", err);
+        });
     });
   }
 
   const footerSpans = document.querySelectorAll("footer span");
-  if (footerSpans[0]) footerSpans[0].textContent = "Energy DDS / JSY v1.4";
+  if (footerSpans[0]) footerSpans[0].textContent = "Energy DDS / JSY v1.5";
   if (footerSpans[1]) footerSpans[1].textContent = "Auto discovery · Z1/Z2 · refresh 60″";
 
   restoreSettings();
