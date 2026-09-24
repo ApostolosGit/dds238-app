@@ -310,21 +310,21 @@
       return `
         <section class="tariff-dashboard">
           <div class="section-title-row">
-            <h3>Ενέργεια Ζ1 / Ζ2</h3>
+            <h3>Ρολόγια ΔΕΗ Ζ1 / Ζ2</h3>
             <span class="zone-now ${isZ2 ? "cheap" : "normal"}">Τώρα ${escapeHtml(zone)}</span>
           </div>
           <div class="tariff-zone-grid">
             <article class="tariff-zone-card">
-              <h4>Ζ1 · ακριβή</h4>
-              ${tariffRow("Reference", z1Ref)}
+              <h4>Ζ1 · ακριβή ζώνη</h4>
+              ${tariffRow("Διαφορά", z1Diff, "kWh", diffTone(z1Diff))}
               ${tariffRow("Now", z1Now)}
-              ${tariffRow("Diff", z1Diff, "kWh", diffTone(z1Diff))}
+              ${tariffRow("Reference", z1Ref)}
             </article>
             <article class="tariff-zone-card cheap-zone-card">
-              <h4>Ζ2 · φθηνή</h4>
-              ${tariffRow("Reference", z2Ref)}
+              <h4>Ζ2 · οικονομική ζώνη</h4>
+              ${tariffRow("Διαφορά", z2Diff, "kWh", diffTone(z2Diff))}
               ${tariffRow("Now", z2Now)}
-              ${tariffRow("Diff", z2Diff, "kWh", diffTone(z2Diff))}
+              ${tariffRow("Reference", z2Ref)}
             </article>
           </div>
           <div class="tariff-meta">Ρολόι: ${escapeHtml(clock)} · ${escapeHtml(state.datetime || "")}</div>
@@ -338,14 +338,17 @@
     return `
       <section class="tariff-dashboard single-zone-dashboard">
         <div class="section-title-row">
-          <h3>Ενέργεια Ζ</h3>
+          <h3>Ρολόγια ΔΕΗ Ζ</h3>
           <span class="section-meta">${escapeHtml(state.datetime || "")}</span>
         </div>
-        <article class="tariff-zone-card single-zone-card">
-          ${tariffRow("Ζ reference", zRef)}
-          ${tariffRow("Ζ now", zNow)}
-          ${tariffRow("Diff", zDiff, "kWh", diffTone(zDiff))}
-        </article>
+        <div class="tariff-zone-grid single-zone-grid">
+          <article class="tariff-zone-card single-zone-card">
+            <h4>Ζ</h4>
+            ${tariffRow("Διαφορά", zDiff, "kWh", diffTone(zDiff))}
+            ${tariffRow("Now", zNow)}
+            ${tariffRow("Reference", zRef)}
+          </article>
+        </div>
       </section>`;
   }
 
@@ -374,12 +377,13 @@
 
   function renderJsyBody(device) {
     const s = device.state;
+    const phaseNames = ["R", "S", "T"];
     const phaseCards = [1, 2, 3].map((phase) => {
       const current = Math.abs(Number(s[`i${phase}`]) || 0);
       const power = signedPhasePower(s, phase);
       return `
         <article class="phase-card">
-          <div class="phase-head"><strong>L${phase}</strong></div>
+          <div class="phase-head"><strong>Φάση ${phaseNames[phase - 1]}</strong></div>
           ${phaseRow("Ισχύς", formatNumber(power, 0), "W", `phase-power-row ${powerTone(power)}`)}
           ${phaseRow("Ρεύμα", formatNumber(current, 2), "A")}
           ${phaseRow("Τάση", formatNumber(s[`v${phase}`], 1), "V")}
@@ -391,13 +395,10 @@
     const totalPower = signedTotalPower(s);
 
     return `
-      <section class="jsy-summary-grid compact-jsy-summary">
+      <section class="jsy-summary-grid single-jsy-summary">
         ${metric("Συνολική ισχύς", formatNumber(totalPower / 1000, 2), "kW", powerTone(totalPower))}
-        ${metric("Power factor", formatNumber(s.pf_total, 3))}
-        ${metric("JSY Total Energy", formatNumber(s.energy_total, 2), "kWh", "accent-card")}
       </section>
-      <div class="section-title-row"><h3>Φάσεις</h3></div>
-      <section class="phases-grid">${phaseCards}</section>
+      <section class="phases-grid phases-without-title">${phaseCards}</section>
       ${renderTariffEnergy(s)}`;
   }
 
@@ -899,7 +900,7 @@
   }
 
   const footerSpans = document.querySelectorAll("footer span");
-  if (footerSpans[0]) footerSpans[0].textContent = "Energy DDS / JSY v1.2";
+  if (footerSpans[0]) footerSpans[0].textContent = "Energy DDS / JSY v1.3";
   if (footerSpans[1]) footerSpans[1].textContent = "Auto discovery · Z1/Z2 · refresh 60″";
 
   restoreSettings();
