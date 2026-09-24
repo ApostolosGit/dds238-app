@@ -938,3 +938,131 @@ input:focus { border-color: #2b9c88; box-shadow: 0 0 0 3px rgba(43,156,136,.13);
     font-size: 1.08rem;
   }
 }
+
+
+/* ===== Energy DDS / JSY v1.7 ===== */
+.single-phase-card {
+  width: 100%;
+}
+
+.dds-inline-grid {
+  display: grid;
+  grid-template-columns: minmax(0, .86fr) minmax(0, 1.14fr);
+  gap: 6px;
+  align-items: start;
+}
+
+.dds-inline-column {
+  min-width: 0;
+}
+
+.dds-meter-column {
+  padding-left: 8px;
+  border-left: 1px solid var(--line);
+}
+
+.dds-inline-grid .phase-head,
+.dds-inline-grid .embedded-tariff-title {
+  min-height: 1.45rem;
+  margin: 0 0 5px;
+  display: flex;
+  align-items: center;
+}
+
+.dds-inline-grid .phase-head strong,
+.dds-inline-grid .embedded-tariff-title {
+  font-size: 1.04rem;
+  line-height: 1.1;
+}
+
+.dds-measurement-column .phase-row {
+  grid-template-columns: 3.55rem .38rem minmax(0, 1fr);
+  column-gap: .04rem;
+}
+
+.dds-meter-column .tariff-row {
+  grid-template-columns: 4.7rem .38rem minmax(0, 1fr);
+  column-gap: .04rem;
+}
+
+.dds-inline-grid .phase-value,
+.dds-inline-grid .tariff-row-value {
+  font-size: clamp(1.05rem, 2.2vw, 1.28rem);
+  white-space: nowrap;
+}
+
+.dds-inline-grid .phase-power-row .phase-value {
+  font-size: clamp(1.12rem, 2.35vw, 1.35rem);
+}
+
+.dds-inline-grid .phase-label,
+.dds-inline-grid .tariff-row-label,
+.dds-inline-grid .phase-colon,
+.dds-inline-grid .tariff-row-colon {
+  font-size: .72rem;
+}
+
+@media (max-width: 430px) {
+  .single-phase-card {
+    padding-left: 8px;
+    padding-right: 8px;
+  }
+
+  .dds-inline-grid {
+    grid-template-columns: minmax(0, .82fr) minmax(0, 1.18fr);
+    gap: 4px;
+  }
+
+  .dds-meter-column {
+    padding-left: 5px;
+  }
+
+  .dds-inline-grid .phase-head strong,
+  .dds-inline-grid .embedded-tariff-title {
+    font-size: .88rem;
+  }
+
+  .dds-measurement-column .phase-row {
+    grid-template-columns: 2.95rem .28rem minmax(0, 1fr);
+  }
+
+  .dds-meter-column .tariff-row {
+    grid-template-columns: 3.95rem .28rem minmax(0, 1fr);
+  }
+
+  .dds-inline-grid .phase-value,
+  .dds-inline-grid .tariff-row-value {
+    font-size: 1rem;
+  }
+
+  .dds-inline-grid .phase-power-row .phase-value {
+    font-size: 1.08rem;
+  }
+
+  .dds-inline-grid .phase-label,
+  .dds-inline-grid .tariff-row-label,
+  .dds-inline-grid .phase-colon,
+  .dds-inline-grid .tariff-row-colon {
+    font-size: .62rem;
+  }
+
+  .dds-inline-grid .phase-value small,
+  .dds-inline-grid .tariff-row-value small {
+    font-size: .54em;
+  }
+}
+
+/* Μόνο σε εξαιρετικά στενή οθόνη γυρίζει κάθετα. */
+@media (max-width: 330px) {
+  .dds-inline-grid {
+    grid-template-columns: 1fr;
+    gap: 8px;
+  }
+
+  .dds-meter-column {
+    padding-left: 0;
+    padding-top: 8px;
+    border-left: 0;
+    border-top: 1px solid var(--line);
+  }
+}
