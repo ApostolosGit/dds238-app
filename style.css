@@ -763,3 +763,46 @@ input:focus { border-color: #2b9c88; box-shadow: 0 0 0 3px rgba(43,156,136,.13);
   .phase-row .phase-value { font-size: 1.2rem; }
   .phase-power-row .phase-value { font-size: 1.38rem; }
 }
+
+
+/* ===== Energy DDS / JSY v1.3 ===== */
+.single-jsy-summary {
+  grid-template-columns: 1fr;
+  margin-bottom: 8px;
+}
+.single-jsy-summary .metric-card {
+  min-height: 72px;
+}
+.phases-without-title {
+  margin-top: 0;
+}
+
+.tariff-row {
+  grid-template-columns: 6rem .55rem max-content;
+}
+.tariff-row-value {
+  font-size: 1.28rem;
+  line-height: 1.05;
+  letter-spacing: -.025em;
+}
+.tariff-row-value small {
+  font-size: .58em;
+}
+.single-zone-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+.single-zone-card {
+  width: 100%;
+}
+
+@media (max-width: 620px) {
+  .single-jsy-summary {
+    grid-template-columns: 1fr;
+  }
+  .tariff-row-value {
+    font-size: 1.2rem;
+  }
+  .single-zone-grid {
+    grid-template-columns: 1fr;
+  }
+}
