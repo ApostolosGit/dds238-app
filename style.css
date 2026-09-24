@@ -806,3 +806,71 @@ input:focus { border-color: #2b9c88; box-shadow: 0 0 0 3px rgba(43,156,136,.13);
     grid-template-columns: 1fr;
   }
 }
+
+
+/* ===== Energy DDS / JSY v1.4 ===== */
+.diff-positive .tariff-row-value {
+  color: var(--bad);
+}
+.diff-negative .tariff-row-value {
+  color: var(--warn);
+}
+.diff-zero .tariff-row-value {
+  color: var(--text);
+}
+
+.device-total-power {
+  display: grid;
+  grid-template-columns: max-content .55rem max-content;
+  align-items: baseline;
+  justify-content: start;
+  column-gap: .08rem;
+  margin-top: 4px;
+  line-height: 1.05;
+}
+.device-total-power > span:first-child {
+  color: var(--muted);
+  font-size: .72rem;
+  font-weight: 700;
+}
+.device-total-power-colon {
+  color: var(--muted);
+  font-size: .72rem;
+  text-align: center;
+}
+.device-total-power-value {
+  color: var(--text);
+  font-size: 1.28rem;
+  font-weight: 850;
+  letter-spacing: -.025em;
+  white-space: nowrap;
+}
+.device-total-power-value small {
+  color: var(--muted);
+  font-size: .58em;
+  font-weight: 700;
+}
+.device-total-power.power-positive .device-total-power-value {
+  color: var(--bad);
+}
+.device-total-power.power-negative .device-total-power-value {
+  color: var(--warn);
+}
+
+.single-phase-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  margin-top: 0;
+}
+.single-phase-card {
+  width: min(100%, 420px);
+}
+
+@media (max-width: 620px) {
+  .device-total-power-value {
+    font-size: 1.2rem;
+  }
+  .single-phase-card {
+    width: 100%;
+  }
+}
