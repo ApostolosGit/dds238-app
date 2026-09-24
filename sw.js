@@ -1,4 +1,4 @@
-const CACHE_NAME = "energy-dds-jsy-pwa-v1.4.0";
+const CACHE_NAME = "energy-dds-jsy-pwa-v1.5.0";
 const APP_SHELL = [
   "./",
   "./index.html",
@@ -15,12 +15,37 @@ self.addEventListener("install", (event) => {
 });
 
 self.addEventListener("activate", (event) => {
-  event.waitUntil(
-    caches.keys().then((keys) => Promise.all(
+  event.waitUntil((async () => {
+    const keys = await caches.keys();
+    const hadOldAppCache = keys.some(
+      (key) => key.startsWith("energy-dds-jsy-pwa-") && key !== CACHE_NAME
+    );
+
+    await Promise.all(
       keys.filter((key) => key !== CACHE_NAME).map((key) => caches.delete(key))
-    ))
-  );
-  self.clients.claim();
+    );
+
+    await self.clients.claim();
+
+    // Όταν ενεργοποιείται νέα έκδοση πάνω από παλιό PWA,
+    // ανανεώνουμε αυτόματα τα ανοιχτά παράθυρα ώστε να μη μένουν σε παλιό app.js.
+    if (hadOldAppCache) {
+      const windows = await self.clients.matchAll({
+        type: "window",
+        includeUncontrolled: true
+      });
+
+      await Promise.all(
+        windows.map((client) => client.navigate(client.url).catch(() => null))
+      );
+    }
+  })());
+});
+
+self.addEventListener("message", (event) => {
+  if (event.data && event.data.type === "SKIP_WAITING") {
+    self.skipWaiting();
+  }
 });
 
 self.addEventListener("fetch", (event) => {
