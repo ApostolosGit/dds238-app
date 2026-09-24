@@ -747,3 +747,19 @@ input:focus { border-color: #2b9c88; box-shadow: 0 0 0 3px rgba(43,156,136,.13);
     justify-self: end;
   }
 }
+
+/* v1.2 specificity overrides */
+.phase-row .phase-value {
+  color: var(--text);
+  font-size: 1.28rem;
+}
+.phase-power-row .phase-value {
+  font-size: 1.45rem;
+}
+.power-positive .phase-value { color: var(--bad); }
+.power-negative .phase-value { color: var(--warn); }
+
+@media (max-width: 620px) {
+  .phase-row .phase-value { font-size: 1.2rem; }
+  .phase-power-row .phase-value { font-size: 1.38rem; }
+}
