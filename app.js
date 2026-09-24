@@ -364,22 +364,27 @@
     const zDiff = s.z_diff ?? s.diff;
 
     const singleZoneMeter = dual ? "" : `
-      <div class="embedded-tariff-divider"></div>
-      <div class="embedded-tariff-title">Μετρητής ΔΕΗ Ζ</div>
-      ${tariffRow("Διαφορά", zDiff, "kWh", diffTone(zDiff))}
-      ${tariffRow("Now", zNow)}
-      ${tariffRow("Reference", zRef)}`;
+      <div class="dds-inline-column dds-meter-column">
+        <div class="embedded-tariff-title">Μετρητής ΔΕΗ Ζ</div>
+        ${tariffRow("Διαφορά", zDiff, "kWh", diffTone(zDiff))}
+        ${tariffRow("Now", zNow)}
+        ${tariffRow("Reference", zRef)}
+      </div>`;
 
     return `
       <section class="single-phase-grid">
         <article class="phase-card single-phase-card">
-          <div class="phase-head"><strong>Μονοφασικό</strong></div>
-          ${phaseRow("Ισχύς", formatNumber(power, 0), "W", `phase-power-row ${powerTone(power)}`)}
-          ${phaseRow("Ρεύμα", formatNumber(current, 2), "A")}
-          ${phaseRow("Τάση", formatNumber(s.voltage, 1), "V")}
-          ${phaseRow("Συχν.", formatNumber(s.frequency, 2), "Hz")}
-          ${phaseRow("PF", formatNumber(s.pf, 3))}
-          ${singleZoneMeter}
+          <div class="dds-inline-grid">
+            <div class="dds-inline-column dds-measurement-column">
+              <div class="phase-head"><strong>Μονοφασικό</strong></div>
+              ${phaseRow("Ισχύς", formatNumber(power, 0), "W", `phase-power-row ${powerTone(power)}`)}
+              ${phaseRow("Ρεύμα", formatNumber(current, 2), "A")}
+              ${phaseRow("Τάση", formatNumber(s.voltage, 1), "V")}
+              ${phaseRow("Συχν.", formatNumber(s.frequency, 2), "Hz")}
+              ${phaseRow("PF", formatNumber(s.pf, 3))}
+            </div>
+            ${singleZoneMeter}
+          </div>
         </article>
       </section>
       ${dual ? renderTariffEnergy(s) : ""}`;
@@ -955,7 +960,7 @@
   }
 
   const footerSpans = document.querySelectorAll("footer span");
-  if (footerSpans[0]) footerSpans[0].textContent = "Energy DDS / JSY v1.6";
+  if (footerSpans[0]) footerSpans[0].textContent = "Energy DDS / JSY v1.7";
   if (footerSpans[1]) footerSpans[1].textContent = "Auto discovery · Z1/Z2 · refresh 60″";
 
   restoreSettings();
