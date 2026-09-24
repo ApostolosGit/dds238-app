@@ -258,7 +258,8 @@
 
   function diffTone(value) {
     const n = Number(value);
-    return Number.isFinite(n) && n < 0 ? "diff-negative" : "diff-positive";
+    if (!Number.isFinite(n) || n === 0) return "diff-zero";
+    return n < 0 ? "diff-negative" : "diff-positive";
   }
 
   function signedPhasePower(state, phase) {
@@ -354,14 +355,19 @@
 
   function renderDdsBody(device) {
     const s = device.state;
-    const p = Number(s.power) || 0;
+    const power = Number(s.power) || 0;
+    const current = Math.abs(Number(s.current) || 0);
+
     return `
-      <section class="metrics-grid dds-metrics-grid">
-        ${metric("Ισχύς τώρα", formatNumber(p, 0), "W", powerTone(p))}
-        ${metric("Τάση", formatNumber(s.voltage, 1), "V")}
-        ${metric("Ρεύμα", formatNumber(s.current, 2), "A")}
-        ${metric("Power factor", formatNumber(s.pf, 3))}
-        ${metric("Συχνότητα", formatNumber(s.frequency, 2), "Hz")}
+      <section class="single-phase-grid">
+        <article class="phase-card single-phase-card">
+          <div class="phase-head"><strong>Μονοφασικό</strong></div>
+          ${phaseRow("Ισχύς", formatNumber(power, 0), "W", `phase-power-row ${powerTone(power)}`)}
+          ${phaseRow("Ρεύμα", formatNumber(current, 2), "A")}
+          ${phaseRow("Τάση", formatNumber(s.voltage, 1), "V")}
+          ${phaseRow("Συχν.", formatNumber(s.frequency, 2), "Hz")}
+          ${phaseRow("PF", formatNumber(s.pf, 3))}
+        </article>
       </section>
       ${renderTariffEnergy(s)}`;
   }
@@ -392,12 +398,7 @@
         </article>`;
     }).join("");
 
-    const totalPower = signedTotalPower(s);
-
     return `
-      <section class="jsy-summary-grid single-jsy-summary">
-        ${metric("Συνολική ισχύς", formatNumber(totalPower / 1000, 2), "kW", powerTone(totalPower))}
-      </section>
       <section class="phases-grid phases-without-title">${phaseCards}</section>
       ${renderTariffEnergy(s)}`;
   }
@@ -417,6 +418,17 @@
     const buildDate = state.build_date || "--";
     const rssi = Number.isFinite(Number(state.rssi)) ? `${formatNumber(state.rssi, 0)} dBm` : "--";
 
+    let totalPowerLine = "";
+    if (hasState && meterType(device) === "JSY") {
+      const totalPower = signedTotalPower(state);
+      totalPowerLine = `
+        <div class="device-total-power ${powerTone(totalPower)}">
+          <span>Συνολική ισχύς</span>
+          <span class="device-total-power-colon">:</span>
+          <b class="device-total-power-value">${escapeHtml(formatNumber(totalPower / 1000, 2))} <small>kW</small></b>
+        </div>`;
+    }
+
     return `
       <article class="device-panel" data-device="${escapeHtml(device.id)}">
         <div class="device-head">
@@ -425,6 +437,7 @@
             <div>
               <span class="device-id">${escapeHtml(device.id)}</span>
               <h2>${escapeHtml(deviceTitle(device))}</h2>
+              ${totalPowerLine}
               <span class="firmware-meta">Firmware ${escapeHtml(firmware)} · ${escapeHtml(buildDate)}</span>
             </div>
           </div>
@@ -900,7 +913,7 @@
   }
 
   const footerSpans = document.querySelectorAll("footer span");
-  if (footerSpans[0]) footerSpans[0].textContent = "Energy DDS / JSY v1.3";
+  if (footerSpans[0]) footerSpans[0].textContent = "Energy DDS / JSY v1.4";
   if (footerSpans[1]) footerSpans[1].textContent = "Auto discovery · Z1/Z2 · refresh 60″";
 
   restoreSettings();
