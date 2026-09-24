@@ -311,7 +311,7 @@
       return `
         <section class="tariff-dashboard">
           <div class="section-title-row">
-            <h3>Ρολόγια ΔΕΗ Ζ1 / Ζ2</h3>
+            <h3>Ρολόγια ΔΕΗ: Μετρητής Ζ1, Μετρητής Ζ2</h3>
             <span class="zone-now ${isZ2 ? "cheap" : "normal"}">Τώρα ${escapeHtml(zone)}</span>
           </div>
           <div class="tariff-zone-grid">
@@ -339,7 +339,7 @@
     return `
       <section class="tariff-dashboard single-zone-dashboard">
         <div class="section-title-row">
-          <h3>Ρολόγια ΔΕΗ Ζ</h3>
+          <h3>Μετρητής ΔΕΗ Ζ</h3>
           <span class="section-meta">${escapeHtml(state.datetime || "")}</span>
         </div>
         <div class="tariff-zone-grid single-zone-grid">
@@ -357,6 +357,18 @@
     const s = device.state;
     const power = Number(s.power) || 0;
     const current = Math.abs(Number(s.current) || 0);
+    const dual = s.dual_zone === true || s.tariff_mode === "dual";
+
+    const zRef = s.z_ref ?? s.deh_reference;
+    const zNow = s.z_now ?? s.deh_now;
+    const zDiff = s.z_diff ?? s.diff;
+
+    const singleZoneMeter = dual ? "" : `
+      <div class="embedded-tariff-divider"></div>
+      <div class="embedded-tariff-title">Μετρητής ΔΕΗ Ζ</div>
+      ${tariffRow("Διαφορά", zDiff, "kWh", diffTone(zDiff))}
+      ${tariffRow("Now", zNow)}
+      ${tariffRow("Reference", zRef)}`;
 
     return `
       <section class="single-phase-grid">
@@ -367,9 +379,10 @@
           ${phaseRow("Τάση", formatNumber(s.voltage, 1), "V")}
           ${phaseRow("Συχν.", formatNumber(s.frequency, 2), "Hz")}
           ${phaseRow("PF", formatNumber(s.pf, 3))}
+          ${singleZoneMeter}
         </article>
       </section>
-      ${renderTariffEnergy(s)}`;
+      ${dual ? renderTariffEnergy(s) : ""}`;
   }
 
   function phaseRow(label, value, unit = "", extra = "") {
@@ -436,8 +449,10 @@
             <span class="dot dot-good"></span>
             <div>
               <span class="device-id">${escapeHtml(device.id)}</span>
-              <h2>${escapeHtml(deviceTitle(device))}</h2>
-              ${totalPowerLine}
+              <div class="device-title-line">
+                <h2>${escapeHtml(deviceTitle(device))}</h2>
+                ${totalPowerLine}
+              </div>
               <span class="firmware-meta">Firmware ${escapeHtml(firmware)} · ${escapeHtml(buildDate)}</span>
             </div>
           </div>
@@ -940,7 +955,7 @@
   }
 
   const footerSpans = document.querySelectorAll("footer span");
-  if (footerSpans[0]) footerSpans[0].textContent = "Energy DDS / JSY v1.5";
+  if (footerSpans[0]) footerSpans[0].textContent = "Energy DDS / JSY v1.6";
   if (footerSpans[1]) footerSpans[1].textContent = "Auto discovery · Z1/Z2 · refresh 60″";
 
   restoreSettings();
