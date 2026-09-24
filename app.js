@@ -73,7 +73,7 @@
       <div class="setting-toggle-row">
         <div>
           <p class="eyebrow">ΔΙΖΩΝΙΚΟ</p>
-          <h3>Μετρητές Ζ1 / Ζ2</h3>
+          <h3>Διζωνικό Ζ1 / Ζ2</h3>
         </div>
         <label class="switch-label">
           <input id="dualZoneToggle" type="checkbox">
@@ -82,7 +82,7 @@
       </div>
 
       <p id="dualZoneUnsupported" class="admin-help hidden">
-        Ο συγκεκριμένος ESP δεν αναφέρει υποστήριξη Ζ1/Ζ2. Απαιτεί firmware 1.16 ή νεότερο.
+        Ο συγκεκριμένος ESP δεν αναφέρει υποστήριξη Ζ1/Ζ2. Απαιτεί firmware 1.18 ή νεότερο.
       </p>
 
       <div id="dualZoneDetails" class="hidden">
@@ -119,12 +119,12 @@
         </div>
 
         <p class="admin-help">
-          Οι τιμές Ζ1/Ζ2 είναι οι πραγματικές ενδείξεις από τις οποίες θέλεις να συνεχίσει η καταμέτρηση.
+          Κάθε νέα δήλωση Ζ1/Ζ2 γίνεται νέο Reference. Τα Ζ1/Ζ2 Now ξεκινούν από αυτές τις τιμές και μετά μεταβάλλονται αυτόματα.
         </p>
       </div>
 
       <button id="saveDualZoneBtn" class="primary-btn admin-btn full-btn" type="button">
-        ΑΠΟΘΗΚΕΥΣΗ ΔΙΖΩΝΙΚΟΥ
+        ΑΠΟΘΗΚΕΥΣΗ ΡΥΘΜΙΣΗΣ
       </button>
     `;
 
@@ -133,6 +133,7 @@
 
   injectDualZoneUi();
 
+  ui.monoZoneSettings = $("monoZoneSettings");
   ui.dualZoneToggle = $("dualZoneToggle");
   ui.dualZoneDetails = $("dualZoneDetails");
   ui.dualZoneUnsupported = $("dualZoneUnsupported");
@@ -255,105 +256,154 @@
       </article>`;
   }
 
-  function renderDualZone(state) {
-    if (state.dual_zone !== true) return "";
+  function diffTone(value) {
+    const n = Number(value);
+    return Number.isFinite(n) && n < 0 ? "diff-negative" : "diff-positive";
+  }
 
-    const zone = String(state.tariff_zone || "-");
-    const isZ2 = zone === "Z2";
-    const clock = state.clock_source === "internal" ? "εσωτερικό ρολόι" :
-                  state.clock_source === "ntp/internal" ? "NTP / εσωτερικό" :
-                  "χωρίς έγκυρη ώρα";
+  function signedPhasePower(state, phase) {
+    const raw = Number(state[`p${phase}`]);
+    if (!Number.isFinite(raw)) return 0;
+    if (raw < 0) return raw;
+    return phaseDirection(state, phase) === "REV" ? -Math.abs(raw) : Math.abs(raw);
+  }
+
+  function signedTotalPower(state) {
+    const raw = Number(state.power_total);
+    if (!Number.isFinite(raw)) return 0;
+    if (raw < 0) return raw;
+    return totalReverse(state) ? -Math.abs(raw) : Math.abs(raw);
+  }
+
+  function powerTone(value) {
+    const n = Number(value);
+    return n < 0 ? "power-negative" : "power-positive";
+  }
+
+  function tariffRow(label, value, unit = "kWh", extra = "") {
+    return `
+      <div class="tariff-row ${extra}">
+        <span class="tariff-row-label">${escapeHtml(label)}</span>
+        <span class="tariff-row-colon">:</span>
+        <b class="tariff-row-value">${escapeHtml(formatNumber(value, 2))}${unit ? ` <small>${escapeHtml(unit)}</small>` : ""}</b>
+      </div>`;
+  }
+
+  function renderTariffEnergy(state) {
+    const dual = state.dual_zone === true || state.tariff_mode === "dual";
+
+    if (dual) {
+      const zone = String(state.tariff_zone || "-");
+      const isZ2 = zone === "Z2";
+      const clock = state.clock_source === "internal" ? "εσωτερικό ρολόι" :
+                    state.clock_source === "ntp/internal" ? "NTP / εσωτερικό" :
+                    "χωρίς έγκυρη ώρα";
+
+      const z1Ref = state.z1_ref ?? state.z1 ?? 0;
+      const z1Now = state.z1_now ?? state.z1 ?? 0;
+      const z1Diff = state.z1_diff ?? (Number(z1Now) - Number(z1Ref));
+
+      const z2Ref = state.z2_ref ?? state.z2 ?? 0;
+      const z2Now = state.z2_now ?? state.z2 ?? 0;
+      const z2Diff = state.z2_diff ?? (Number(z2Now) - Number(z2Ref));
+
+      return `
+        <section class="tariff-dashboard">
+          <div class="section-title-row">
+            <h3>Ενέργεια Ζ1 / Ζ2</h3>
+            <span class="zone-now ${isZ2 ? "cheap" : "normal"}">Τώρα ${escapeHtml(zone)}</span>
+          </div>
+          <div class="tariff-zone-grid">
+            <article class="tariff-zone-card">
+              <h4>Ζ1 · ακριβή</h4>
+              ${tariffRow("Reference", z1Ref)}
+              ${tariffRow("Now", z1Now)}
+              ${tariffRow("Diff", z1Diff, "kWh", diffTone(z1Diff))}
+            </article>
+            <article class="tariff-zone-card cheap-zone-card">
+              <h4>Ζ2 · φθηνή</h4>
+              ${tariffRow("Reference", z2Ref)}
+              ${tariffRow("Now", z2Now)}
+              ${tariffRow("Diff", z2Diff, "kWh", diffTone(z2Diff))}
+            </article>
+          </div>
+          <div class="tariff-meta">Ρολόι: ${escapeHtml(clock)} · ${escapeHtml(state.datetime || "")}</div>
+        </section>`;
+    }
+
+    const zRef = state.z_ref ?? state.deh_reference;
+    const zNow = state.z_now ?? state.deh_now;
+    const zDiff = state.z_diff ?? state.diff;
 
     return `
-      <section class="tariff-dashboard">
+      <section class="tariff-dashboard single-zone-dashboard">
         <div class="section-title-row">
-          <h3>Διζωνικό</h3>
-          <span class="zone-now ${isZ2 ? "cheap" : "normal"}">Τώρα ${escapeHtml(zone)}</span>
+          <h3>Ενέργεια Ζ</h3>
+          <span class="section-meta">${escapeHtml(state.datetime || "")}</span>
         </div>
-        <div class="tariff-grid">
-          ${metric("Ζ1 · ακριβή", formatNumber(state.z1, 2), "kWh")}
-          ${metric("Ζ2 · φθηνή", formatNumber(state.z2, 2), "kWh", "cheap-card")}
-        </div>
-        <div class="tariff-meta">Ρολόι: ${escapeHtml(clock)}</div>
+        <article class="tariff-zone-card single-zone-card">
+          ${tariffRow("Ζ reference", zRef)}
+          ${tariffRow("Ζ now", zNow)}
+          ${tariffRow("Diff", zDiff, "kWh", diffTone(zDiff))}
+        </article>
       </section>`;
   }
 
   function renderDdsBody(device) {
     const s = device.state;
+    const p = Number(s.power) || 0;
     return `
-      <section class="metrics-grid">
-        ${metric("Ισχύς τώρα", formatNumber(s.power, 0), "W", "power-card")}
+      <section class="metrics-grid dds-metrics-grid">
+        ${metric("Ισχύς τώρα", formatNumber(p, 0), "W", powerTone(p))}
         ${metric("Τάση", formatNumber(s.voltage, 1), "V")}
         ${metric("Ρεύμα", formatNumber(s.current, 2), "A")}
         ${metric("Power factor", formatNumber(s.pf, 3))}
         ${metric("Συχνότητα", formatNumber(s.frequency, 2), "Hz")}
       </section>
-      <section class="energy-section">
-        <div class="section-title-row">
-          <h3>Ενέργεια / DEH</h3>
-          <span class="section-meta">${escapeHtml(s.datetime || "Χωρίς ημερομηνία")}</span>
-        </div>
-        <div class="energy-grid">
-          ${metric("Diff", formatNumber(s.diff, 2), "kWh", "diff-card")}
-          ${metric("DEH τώρα", formatNumber(s.deh_now, 2), "kWh")}
-          ${metric("DEH reference", formatNumber(s.deh_reference, 2), "kWh")}
-          ${metric("Forward", formatNumber(s.energy_fwd, 2), "kWh")}
-          ${metric("Reverse", formatNumber(s.energy_rev, 2), "kWh")}
-        </div>
-      </section>
-      ${renderDualZone(s)}`;
+      ${renderTariffEnergy(s)}`;
+  }
+
+  function phaseRow(label, value, unit = "", extra = "") {
+    return `
+      <div class="phase-row ${extra}">
+        <span class="phase-label">${escapeHtml(label)}</span>
+        <span class="phase-colon">:</span>
+        <b class="phase-value">${escapeHtml(value)}${unit ? ` <small>${escapeHtml(unit)}</small>` : ""}</b>
+      </div>`;
   }
 
   function renderJsyBody(device) {
     const s = device.state;
-    const revTotal = totalReverse(s);
-    const totalLabel = revTotal ? "E · παραγωγή" : "P · κατανάλωση";
     const phaseCards = [1, 2, 3].map((phase) => {
-      const dir = phaseDirection(s, phase);
-      const rev = dir === "REV";
       const current = Math.abs(Number(s[`i${phase}`]) || 0);
-      const power = Math.abs(Number(s[`p${phase}`]) || 0);
+      const power = signedPhasePower(s, phase);
       return `
         <article class="phase-card">
-          <div class="phase-head">
-            <strong>L${phase}</strong>
-            <span class="direction-badge ${rev ? "reverse" : "forward"}">${dir}</span>
-          </div>
-          <div class="phase-row"><span>Τάση</span><b>${formatNumber(s[`v${phase}`], 1)} V</b></div>
-          <div class="phase-row"><span>Ρεύμα</span><b>${rev ? "i" : "I"}${phase} ${formatNumber(current, 2)} A</b></div>
-          <div class="phase-row"><span>Ισχύς</span><b>${rev ? "E" : "P"}${phase} ${formatNumber(power, 0)} W</b></div>
-          <div class="phase-row"><span>PF</span><b>${formatNumber(s[`pf${phase}`], 3)}</b></div>
+          <div class="phase-head"><strong>L${phase}</strong></div>
+          ${phaseRow("Ισχύς", formatNumber(power, 0), "W", `phase-power-row ${powerTone(power)}`)}
+          ${phaseRow("Ρεύμα", formatNumber(current, 2), "A")}
+          ${phaseRow("Τάση", formatNumber(s[`v${phase}`], 1), "V")}
+          ${phaseRow("Συχν.", formatNumber(s.frequency, 2), "Hz")}
+          ${phaseRow("PF", formatNumber(s[`pf${phase}`], 3))}
         </article>`;
     }).join("");
 
-    const totalPower = Math.abs(Number(s.power_total) || 0);
+    const totalPower = signedTotalPower(s);
 
     return `
-      <section class="jsy-summary-grid">
-        ${metric(`Συνολική ισχύς (${totalLabel})`, formatNumber(totalPower / 1000, 2), "kW", revTotal ? "reverse-card" : "power-card")}
-        ${metric("Συχνότητα", formatNumber(s.frequency, 2), "Hz")}
+      <section class="jsy-summary-grid compact-jsy-summary">
+        ${metric("Συνολική ισχύς", formatNumber(totalPower / 1000, 2), "kW", powerTone(totalPower))}
         ${metric("Power factor", formatNumber(s.pf_total, 3))}
         ${metric("JSY Total Energy", formatNumber(s.energy_total, 2), "kWh", "accent-card")}
       </section>
       <div class="section-title-row"><h3>Φάσεις</h3></div>
       <section class="phases-grid">${phaseCards}</section>
-      <section class="energy-section">
-        <div class="section-title-row">
-          <h3>Ενέργεια / DEH</h3>
-          <span class="section-meta">${escapeHtml(s.datetime || "Χωρίς ημερομηνία")}</span>
-        </div>
-        <div class="energy-grid compact-four">
-          ${metric("Diff", formatNumber(s.diff, 2), "kWh", "diff-card")}
-          ${metric("DEH τώρα", formatNumber(s.deh_now, 2), "kWh")}
-          ${metric("DEH reference", formatNumber(s.deh_reference, 2), "kWh")}
-          ${metric("RSSI", formatNumber(s.rssi, 0), "dBm")}
-        </div>
-      </section>
-      ${renderDualZone(s)}`;
+      ${renderTariffEnergy(s)}`;
   }
 
   function renderDevice(device) {
     const hasState = device.state && Object.keys(device.state).length > 0;
+    const state = device.state || {};
     const body = hasState
       ? (meterType(device) === "JSY" ? renderJsyBody(device) : renderDdsBody(device))
       : '<div class="waiting-state">Αναμονή για την πρώτη μέτρηση…</div>';
@@ -361,6 +411,10 @@
     const last = device.lastReceived
       ? device.lastReceived.toLocaleTimeString("el-GR", { hour: "2-digit", minute: "2-digit", second: "2-digit" })
       : "--";
+
+    const firmware = state.firmware ? `v${state.firmware}` : "--";
+    const buildDate = state.build_date || "--";
+    const rssi = Number.isFinite(Number(state.rssi)) ? `${formatNumber(state.rssi, 0)} dBm` : "--";
 
     return `
       <article class="device-panel" data-device="${escapeHtml(device.id)}">
@@ -370,11 +424,15 @@
             <div>
               <span class="device-id">${escapeHtml(device.id)}</span>
               <h2>${escapeHtml(deviceTitle(device))}</h2>
+              <span class="firmware-meta">Firmware ${escapeHtml(firmware)} · ${escapeHtml(buildDate)}</span>
             </div>
           </div>
-          <div class="device-actions">
-            <button class="small-btn refresh-device" type="button" data-action="refresh" data-device="${escapeHtml(device.id)}">↻ UPDATE</button>
-            <button class="small-btn ghost" type="button" data-action="admin" data-device="${escapeHtml(device.id)}">ΡΥΘΜΙΣΕΙΣ</button>
+          <div class="device-head-right">
+            <span class="rssi-badge">RSSI ${escapeHtml(rssi)}</span>
+            <div class="device-actions">
+              <button class="small-btn refresh-device" type="button" data-action="refresh" data-device="${escapeHtml(device.id)}">↻ UPDATE</button>
+              <button class="small-btn ghost" type="button" data-action="admin" data-device="${escapeHtml(device.id)}">ΡΥΘΜΙΣΕΙΣ</button>
+            </div>
           </div>
         </div>
         ${body}
@@ -437,17 +495,29 @@
 
   function refreshDualZoneSettings(device) {
     const s = device.state || {};
-    const supported = Object.prototype.hasOwnProperty.call(s, "dual_zone");
+    const supported = Object.prototype.hasOwnProperty.call(s, "dual_zone") ||
+                      Object.prototype.hasOwnProperty.call(s, "tariff_mode");
+
+    const dual = supported && (s.dual_zone === true || s.tariff_mode === "dual");
 
     ui.dualZoneUnsupported.classList.toggle("hidden", supported);
     ui.dualZoneToggle.disabled = !supported;
     ui.saveDualZoneBtn.disabled = !supported;
-    ui.dualZoneToggle.checked = supported && s.dual_zone === true;
+    ui.dualZoneToggle.checked = dual;
 
-    ui.z1Input.value = Number.isFinite(Number(s.z1)) ? Number(s.z1).toFixed(2) : "";
-    ui.z2Input.value = Number.isFinite(Number(s.z2)) ? Number(s.z2).toFixed(2) : "";
+    const z1Value = s.z1_now ?? s.z1 ?? s.z1_ref;
+    const z2Value = s.z2_now ?? s.z2 ?? s.z2_ref;
+    ui.z1Input.value = Number.isFinite(Number(z1Value)) ? Number(z1Value).toFixed(2) : "";
+    ui.z2Input.value = Number.isFinite(Number(z2Value)) ? Number(z2Value).toFixed(2) : "";
 
-    ui.dualZoneDetails.classList.toggle("hidden", !ui.dualZoneToggle.checked);
+    const zValue = s.z_now ?? s.deh_now ?? s.z_ref ?? s.deh_reference;
+    if (!dual && Number.isFinite(Number(zValue))) {
+      ui.dehAdminInput.value = Number(zValue).toFixed(2);
+    }
+
+    ui.dualZoneDetails.classList.toggle("hidden", !dual);
+    if (ui.monoZoneSettings) ui.monoZoneSettings.classList.toggle("hidden", dual);
+    ui.saveDualZoneBtn.textContent = dual ? "ΑΠΟΘΗΚΕΥΣΗ Ζ1 / Ζ2" : "ΑΠΟΘΗΚΕΥΣΗ ΜΟΝΟΖΩΝΙΚΟΥ";
   }
 
   function openAdmin(id) {
@@ -456,7 +526,6 @@
     adminTargetId = id;
     ui.adminEyebrow.textContent = `${meterName(device)} SETTINGS`;
     ui.adminTitle.textContent = `Ρυθμίσεις · ${id}`;
-    ui.dehAdminInput.value = "";
     refreshDualZoneSettings(device);
     setAdminStatus("Έτοιμο.", "ok");
     updateAdminButtons();
@@ -489,7 +558,7 @@
     const raw = ui.dehAdminInput.value.trim();
     const value = Number(raw);
     if (!raw || !Number.isFinite(value) || value <= 0 || value >= 999999) {
-      setAdminStatus("Γράψε έγκυρη νέα τιμή DEH.", "error");
+      setAdminStatus("Γράψε έγκυρη νέα τιμή Ζ.", "error");
       return null;
     }
     return raw;
@@ -743,7 +812,7 @@
 
   ui.storeDehBtn.addEventListener("click", () => {
     const value = adminDehValue();
-    if (value !== null) sendAdmin(`store_deh|${value}`, "Αποθήκευση νέου DEH reference…");
+    if (value !== null) sendAdmin(`zone_set|${value}`, "Αποθήκευση νέου Ζ reference…");
   });
 
   ui.resetStoreDehBtn.addEventListener("click", () => {
@@ -765,7 +834,10 @@
   });
 
   ui.dualZoneToggle.addEventListener("change", () => {
-    ui.dualZoneDetails.classList.toggle("hidden", !ui.dualZoneToggle.checked);
+    const enabled = ui.dualZoneToggle.checked;
+    ui.dualZoneDetails.classList.toggle("hidden", !enabled);
+    if (ui.monoZoneSettings) ui.monoZoneSettings.classList.toggle("hidden", enabled);
+    ui.saveDualZoneBtn.textContent = enabled ? "ΑΠΟΘΗΚΕΥΣΗ Ζ1 / Ζ2" : "ΑΠΟΘΗΚΕΥΣΗ ΜΟΝΟΖΩΝΙΚΟΥ";
   });
 
   ui.saveDualZoneBtn.addEventListener("click", () => {
@@ -773,7 +845,7 @@
 
     const device = devices.get(adminTargetId);
     if (!device || !Object.prototype.hasOwnProperty.call(device.state || {}, "dual_zone")) {
-      setAdminStatus("Απαιτεί firmware 1.16 ή νεότερο.", "error");
+      setAdminStatus("Απαιτεί firmware 1.18 ή νεότερο.", "error");
       return;
     }
 
@@ -827,7 +899,7 @@
   }
 
   const footerSpans = document.querySelectorAll("footer span");
-  if (footerSpans[0]) footerSpans[0].textContent = "Energy DDS / JSY v1.1";
+  if (footerSpans[0]) footerSpans[0].textContent = "Energy DDS / JSY v1.2";
   if (footerSpans[1]) footerSpans[1].textContent = "Auto discovery · Z1/Z2 · refresh 60″";
 
   restoreSettings();
