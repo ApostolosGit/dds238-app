@@ -1,4 +1,4 @@
-# Energy DDS / JSY — PWA v1.1
+# Energy DDS / JSY — PWA v1.2
 
 Κοινή web/PWA εφαρμογή για DDS238 και JSY-MK-333 μέσω HiveMQ Cloud / MQTT over WebSocket.
 
@@ -42,11 +42,14 @@ DDS238:
 - DEH / Diff / Forward / Reverse / RSSI
 
 JSY-MK-333:
-- V1/V2/V3
-- I1/I2/I3 με FWD/REV
-- P1/P2/P3 με P/E λογική
-- Total Power / Total PF / Frequency / Total Energy
-- DEH / Diff / RSSI
+- RSSI πάνω δεξιά στο panel
+- Firmware version και build date ανά ESP
+- L1/L2/L3 με σειρά: Ισχύς, Ρεύμα, Τάση, Συχνότητα, PF
+- χωρίς FWD badge και χωρίς I1/I2/I3 ή P1/P2/P3 prefixes
+- θετική ισχύς κόκκινη, αρνητική ισχύς κίτρινη
+- στοιχισμένα labels/τιμές σε compact διάταξη
+- μονοζωνικό: Ζ reference / Ζ now / Diff
+- διζωνικό: Ζ1 reference/now/diff και Ζ2 reference/now/diff
 
 ## Admin ανά συσκευή
 
@@ -74,7 +77,7 @@ Default:
 
 ## Διζωνικό Ζ1 / Ζ2
 
-Με firmware 1.16+ (προτεινόμενη τρέχουσα έκδοση: 1.17), κάθε συσκευή μπορεί προαιρετικά να ενεργοποιήσει διζωνική καταμέτρηση από τις **ΡΥΘΜΙΣΕΙΣ** του δικού της panel.
+Με firmware 1.18+ (προτεινόμενη τρέχουσα έκδοση: 1.19), κάθε συσκευή μπορεί προαιρετικά να ενεργοποιήσει διζωνική καταμέτρηση από τις **ΡΥΘΜΙΣΕΙΣ** του δικού της panel.
 
 - **Ζ1** = ακριβή / κανονική ζώνη
 - **Ζ2** = φθηνή / μειωμένη ζώνη
@@ -83,10 +86,20 @@ Default:
 
 Όταν το διζωνικό είναι ενεργό, το dashboard εμφανίζει τους μετρητές Ζ1 / Ζ2 και την τρέχουσα ζώνη. Η ρύθμιση και οι αρχικές τιμές Ζ1 / Ζ2 αποστέλλονται στο συγκεκριμένο ESP μέσω του αντίστοιχου MQTT admin topic.
 
-## Firmware 1.17
+## Firmware 1.19
 
 Η τρέχουσα firmware έκδοση βρίσκεται στο repo `ApostolosGit/ESP8266` ως:
 
-`EnergyMeter_DDS238_JSY_Ver1_17.ino`
+`EnergyMeter_DDS238_JSY_Ver1_19.ino`
 
 Η προεπιλεγμένη τοπική IP είναι `192.168.1.80`. Για επιπλέον ESP στο ίδιο LAN πρέπει να οριστεί διαφορετικό `STATIC_IP_LAST_OCTET`, π.χ. 81, 82, κ.ο.κ.
+
+
+## Firmware metadata
+
+Από firmware 1.19 το MQTT state περιλαμβάνει:
+
+- `firmware`
+- `build_date`
+
+Το app τα εμφανίζει στο header του κάθε μετρητή, ώστε να φαίνεται άμεσα ποια έκδοση και ημερομηνία build τρέχει κάθε ESP.

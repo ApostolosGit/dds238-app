@@ -548,3 +548,218 @@ input:focus { border-color: #2b9c88; box-shadow: 0 0 0 3px rgba(43,156,136,.13);
   .schedule-grid { grid-template-columns: 1fr; }
   .tariff-grid { grid-template-columns: 1fr 1fr; }
 }
+
+
+/* ===== Energy DDS / JSY v1.2 compact meter layout ===== */
+.device-head-right {
+  display: grid;
+  justify-items: end;
+  gap: 7px;
+  flex: 0 0 auto;
+}
+.firmware-meta {
+  display: block;
+  margin-top: 3px;
+  color: #70869a;
+  font-size: .58rem;
+  line-height: 1.2;
+}
+.rssi-badge {
+  color: var(--muted);
+  font-size: .62rem;
+  font-weight: 800;
+  white-space: nowrap;
+}
+.compact-jsy-summary {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+.power-positive strong,
+.power-positive .phase-value {
+  color: var(--bad);
+}
+.power-negative strong,
+.power-negative .phase-value {
+  color: var(--warn);
+}
+
+.phases-grid {
+  gap: 7px;
+}
+.phase-card {
+  padding: 10px 11px 11px;
+}
+.phase-head {
+  justify-content: flex-start;
+  margin-bottom: 5px;
+}
+.phase-head strong {
+  font-size: 1.12rem;
+}
+.phase-row {
+  display: grid;
+  grid-template-columns: 4.25rem .55rem max-content;
+  justify-content: start;
+  align-items: baseline;
+  column-gap: .08rem;
+  padding: 3px 0;
+  border-top: 0;
+  color: var(--muted);
+  font-size: .78rem;
+}
+.phase-label {
+  text-align: left;
+  font-weight: 700;
+}
+.phase-colon {
+  text-align: center;
+  color: var(--muted);
+}
+.phase-value {
+  color: var(--text);
+  font-size: 1.28rem;
+  font-weight: 850;
+  line-height: 1.05;
+  white-space: nowrap;
+  letter-spacing: -.025em;
+}
+.phase-value small {
+  color: var(--muted);
+  font-size: .58em;
+  font-weight: 700;
+}
+.phase-power-row {
+  padding-top: 1px;
+  padding-bottom: 5px;
+}
+.phase-power-row .phase-value {
+  font-size: 1.45rem;
+}
+
+.tariff-zone-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 7px;
+}
+.tariff-zone-card {
+  border: 1px solid var(--line);
+  border-radius: 13px;
+  padding: 10px 11px;
+  background: linear-gradient(145deg, rgba(18,34,53,.96), rgba(10,24,37,.96));
+}
+.tariff-zone-card h4 {
+  margin: 0 0 7px;
+  font-size: .78rem;
+  color: var(--text);
+}
+.cheap-zone-card h4 {
+  color: var(--accent);
+}
+.tariff-row {
+  display: grid;
+  grid-template-columns: 5.65rem .55rem max-content;
+  justify-content: start;
+  align-items: baseline;
+  column-gap: .08rem;
+  padding: 3px 0;
+}
+.tariff-row-label {
+  color: var(--muted);
+  font-size: .72rem;
+  font-weight: 700;
+}
+.tariff-row-colon {
+  color: var(--muted);
+  font-size: .72rem;
+  text-align: center;
+}
+.tariff-row-value {
+  color: var(--text);
+  font-size: 1.05rem;
+  white-space: nowrap;
+}
+.tariff-row-value small {
+  color: var(--muted);
+  font-size: .62em;
+}
+.diff-negative .tariff-row-value {
+  color: var(--warn);
+}
+.diff-positive .tariff-row-value {
+  color: var(--text);
+}
+.single-zone-card {
+  width: min(100%, 360px);
+}
+.single-zone-card .tariff-row {
+  grid-template-columns: 6.4rem .55rem max-content;
+}
+.single-zone-dashboard {
+  margin-top: 10px;
+}
+.mono-zone-settings {
+  margin-top: 0;
+  padding-top: 0;
+  border-top: 0;
+}
+
+@media (max-width: 980px) {
+  .compact-jsy-summary {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 620px) {
+  .device-head-right {
+    gap: 5px;
+  }
+  .rssi-badge {
+    font-size: .58rem;
+  }
+  .compact-jsy-summary {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+  .phase-card {
+    padding: 9px 10px;
+  }
+  .phase-row {
+    grid-template-columns: 4.15rem .5rem max-content;
+  }
+  .phase-value {
+    font-size: 1.2rem;
+  }
+  .phase-power-row .phase-value {
+    font-size: 1.38rem;
+  }
+  .tariff-zone-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 390px) {
+  .device-head {
+    grid-template-columns: 1fr;
+  }
+  .device-head-right {
+    width: 100%;
+    justify-items: stretch;
+  }
+  .rssi-badge {
+    justify-self: end;
+  }
+}
+
+/* v1.2 specificity overrides */
+.phase-row .phase-value {
+  color: var(--text);
+  font-size: 1.28rem;
+}
+.phase-power-row .phase-value {
+  font-size: 1.45rem;
+}
+.power-positive .phase-value { color: var(--bad); }
+.power-negative .phase-value { color: var(--warn); }
+
+@media (max-width: 620px) {
+  .phase-row .phase-value { font-size: 1.2rem; }
+  .phase-power-row .phase-value { font-size: 1.38rem; }
+}

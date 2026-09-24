@@ -56,7 +56,7 @@
     </main>
 
     <footer>
-      <span>Energy DDS / JSY v1.1</span>
+      <span>Energy DDS / JSY v1.2</span>
       <span>Auto discovery · MQTT wildcard · refresh 60″</span>
     </footer>
   </div>
@@ -117,17 +117,20 @@
         <button id="closeAdminBtn" class="icon-btn light" type="button" aria-label="Κλείσιμο">×</button>
       </div>
 
-      <label>
-        Νέα τιμή DEH (kWh)
-        <input id="dehAdminInput" type="number" inputmode="decimal" min="0.01" max="999998.99" step="0.01" placeholder="π.χ. 34650.25">
-      </label>
+      <section id="monoZoneSettings" class="settings-section mono-zone-settings">
+        <p class="eyebrow">ΜΟΝΟΖΩΝΙΚΟ</p>
+        <label>
+          Νέα τιμή Ζ (kWh)
+          <input id="dehAdminInput" type="number" inputmode="decimal" min="0.01" max="999998.99" step="0.01" placeholder="π.χ. 34650.25">
+        </label>
 
-      <div class="admin-action-grid">
-        <button id="storeDehBtn" class="primary-btn admin-btn" type="button">STORE</button>
-        <button id="resetStoreDehBtn" class="danger-btn admin-btn" type="button">RESET + STORE</button>
-      </div>
+        <div class="admin-action-grid">
+          <button id="storeDehBtn" class="primary-btn admin-btn" type="button">STORE Ζ</button>
+          <button id="resetStoreDehBtn" class="danger-btn admin-btn" type="button">RESET + STORE Ζ</button>
+        </div>
 
-      <p class="admin-help"><b>Store:</b> νέο reference. <b>Reset + Store:</b> διαγράφει daily και drift/calibration history και ξεκινά καθαρά.</p>
+        <p class="admin-help"><b>STORE Ζ:</b> η τιμή γίνεται νέο Ζ reference και Ζ now. <b>RESET + STORE Ζ:</b> καθαρίζει daily και drift/calibration history και ξεκινά καθαρά.</p>
+      </section>
 
       <div class="admin-action-grid">
         <button id="exportDailyBtn" class="secondary-btn admin-btn" type="button">EXPORT DAILY CSV</button>
