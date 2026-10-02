@@ -15,7 +15,7 @@
     path: "/mqtt"
   };
 
-  const APP_VERSION = "1.12";
+  const APP_VERSION = "2.0";
   const AUTO_REFRESH_MS = 60000;
   const OTA_ACK_TIMEOUT_MS = 12000;
   const OTA_POLL_MS = 5000;
@@ -41,6 +41,8 @@
   let otaPollTimer = null;
   let otaTimeoutTimer = null;
   let otaElapsedTimer = null;
+  let editingUtilityId = null;
+  let utilityHistoryRows = [];
 
   const $ = (id) => document.getElementById(id);
 
@@ -70,11 +72,23 @@
     closeAdminBtn: $("closeAdminBtn"),
     adminEyebrow: $("adminEyebrow"),
     adminTitle: $("adminTitle"),
-    dehAdminInput: $("dehAdminInput"),
-    storeDehBtn: $("storeDehBtn"),
-    resetStoreDehBtn: $("resetStoreDehBtn"),
-    exportDailyBtn: $("exportDailyBtn"),
-    clearDailyBtn: $("clearDailyBtn"),
+    utilityReadingSettings: $("utilityReadingSettings"),
+    utilityReadingTitle: $("utilityReadingTitle"),
+    utilityDateInput: $("utilityDateInput"),
+    utilityTimeInput: $("utilityTimeInput"),
+    monoReadingFields: $("monoReadingFields"),
+    dualReadingFields: $("dualReadingFields"),
+    utilityZInput: $("utilityZInput"),
+    utilityZ1Input: $("utilityZ1Input"),
+    utilityZ2Input: $("utilityZ2Input"),
+    utilityEditInfo: $("utilityEditInfo"),
+    saveUtilityReadingBtn: $("saveUtilityReadingBtn"),
+    cancelUtilityEditBtn: $("cancelUtilityEditBtn"),
+    utilityHistoryBtn: $("utilityHistoryBtn"),
+    utilityHistoryDialog: $("utilityHistoryDialog"),
+    utilityHistoryTitle: $("utilityHistoryTitle"),
+    utilityHistoryContent: $("utilityHistoryContent"),
+    closeUtilityHistoryBtn: $("closeUtilityHistoryBtn"),
     adminStatus: $("adminStatus"),
     otaTargetInfo: $("otaTargetInfo"),
     otaUpdateBtn: $("otaUpdateBtn"),
@@ -105,24 +119,24 @@
     section.innerHTML = `
       <div class="setting-toggle-row">
         <div>
-          <p class="eyebrow">ΔΙΖΩΝΙΚΟ</p>
-          <h3>Διζωνικό Ζ1 / Ζ2</h3>
+          <p class="eyebrow">ΤΙΜΟΛΟΓΙΟ</p>
+          <h3>Μετρητής Ζ ή Ζ1 / Ζ2</h3>
         </div>
         <label class="switch-label">
           <input id="dualZoneToggle" type="checkbox">
-          <span>Ενεργό</span>
+          <span>Ζ1 / Ζ2</span>
         </label>
       </div>
 
       <p id="dualZoneUnsupported" class="admin-help hidden">
-        Ο συγκεκριμένος ESP δεν αναφέρει υποστήριξη Ζ1/Ζ2. Απαιτεί firmware 1.18 ή νεότερο.
+        Η νέα λειτουργία απαιτεί firmware v3.00 ή νεότερο.
       </p>
 
       <div id="dualZoneDetails" class="hidden">
         <div class="tariff-schedule">
           <strong>Ωράριο Διζωνικού Συστήματος</strong>
-          <p><b>Ζ1:</b> ακριβή ζώνη · όλες οι ώρες εκτός Ζ2.</p>
-          <p><b>Ζ2:</b> φθηνή ζώνη.</p>
+          <p><b>Ζ1:</b> όλες οι ώρες εκτός Ζ2.</p>
+          <p><b>Ζ2:</b> μειωμένη ζώνη.</p>
           <div class="schedule-grid">
             <div>
               <b>Χειμερινή περίοδος</b>
@@ -139,40 +153,23 @@
           </div>
           <a href="https://apps.deddie.gr/ccrWebapp/dizoniko.html" target="_blank" rel="noopener noreferrer">Πηγή ωραρίου: ΔΕΔΔΗΕ</a>
         </div>
-
-        <div class="form-grid">
-          <label>
-            Ζ1 — ακριβή (kWh)
-            <input id="z1Input" type="number" inputmode="decimal" min="0" max="999998.99" step="0.01">
-          </label>
-          <label>
-            Ζ2 — φθηνή (kWh)
-            <input id="z2Input" type="number" inputmode="decimal" min="0" max="999998.99" step="0.01">
-          </label>
-        </div>
-
-        <p class="admin-help">
-          Κάθε νέα δήλωση Ζ1/Ζ2 γίνεται νέο Reference. Τα Ζ1/Ζ2 Now ξεκινούν από αυτές τις τιμές και μετά μεταβάλλονται αυτόματα.
-        </p>
       </div>
 
       <button id="saveDualZoneBtn" class="primary-btn admin-btn full-btn" type="button">
-        ΑΠΟΘΗΚΕΥΣΗ ΡΥΘΜΙΣΗΣ
+        ΑΠΟΘΗΚΕΥΣΗ ΤΥΠΟΥ ΜΕΤΡΗΤΗ
       </button>
     `;
 
-    ui.adminStatus.parentNode.insertBefore(section, ui.adminStatus);
+    ui.utilityReadingSettings.parentNode.insertBefore(section, ui.utilityReadingSettings);
   }
 
   injectDualZoneUi();
 
-  ui.monoZoneSettings = $("monoZoneSettings");
   ui.dualZoneToggle = $("dualZoneToggle");
   ui.dualZoneDetails = $("dualZoneDetails");
   ui.dualZoneUnsupported = $("dualZoneUnsupported");
-  ui.z1Input = $("z1Input");
-  ui.z2Input = $("z2Input");
   ui.saveDualZoneBtn = $("saveDualZoneBtn");
+
 
   function escapeHtml(value) {
     return String(value ?? "")
