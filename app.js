@@ -15,8 +15,11 @@
     path: "/mqtt"
   };
 
-  const APP_VERSION = "1.11";
+  const APP_VERSION = "1.12";
   const AUTO_REFRESH_MS = 60000;
+  const OTA_ACK_TIMEOUT_MS = 12000;
+  const OTA_POLL_MS = 5000;
+  const OTA_TOTAL_TIMEOUT_MS = 300000;
   const OTA_PIN = "12134";
   const OTA_MANIFEST_URL = "https://raw.githubusercontent.com/ApostolosGit/ESP8266-OTA/main/manifest.txt";
   const OTA_RAW_BASE_URL = "https://raw.githubusercontent.com/ApostolosGit/ESP8266-OTA/main/";
@@ -32,6 +35,12 @@
   let otaTargetId = null;
   let otaPendingManifest = null;
   let otaManifestLoading = false;
+  let otaAwaitingStart = null;
+  let otaSession = null;
+  let otaAckTimer = null;
+  let otaPollTimer = null;
+  let otaTimeoutTimer = null;
+  let otaElapsedTimer = null;
 
   const $ = (id) => document.getElementById(id);
 
@@ -76,6 +85,14 @@
     otaPinError: $("otaPinError"),
     closeOtaPinBtn: $("closeOtaPinBtn"),
     cancelOtaPinBtn: $("cancelOtaPinBtn"),
+    otaProgressDialog: $("otaProgressDialog"),
+    otaProgressTitle: $("otaProgressTitle"),
+    otaProgressStatus: $("otaProgressStatus"),
+    otaProgressDevice: $("otaProgressDevice"),
+    otaProgressVersions: $("otaProgressVersions"),
+    otaProgressDetails: $("otaProgressDetails"),
+    otaProgressVisual: $("otaProgressVisual"),
+    otaProgressCloseBtn: $("otaProgressCloseBtn"),
     toast: $("toast")
   };
 
@@ -642,6 +659,178 @@
     return parseOtaManifest(await response.text());
   }
 
+  function clearOtaAckTimer() {
+    if (otaAckTimer) clearTimeout(otaAckTimer);
+    otaAckTimer = null;
+  }
+
+  function clearOtaSessionTimers() {
+    if (otaPollTimer) clearInterval(otaPollTimer);
+    if (otaTimeoutTimer) clearTimeout(otaTimeoutTimer);
+    if (otaElapsedTimer) clearInterval(otaElapsedTimer);
+    otaPollTimer = null;
+    otaTimeoutTimer = null;
+    otaElapsedTimer = null;
+  }
+
+  function otaElapsedSeconds() {
+    if (!otaSession || !otaSession.startedAt) return 0;
+    return Math.max(0, Math.round((Date.now() - otaSession.startedAt) / 1000));
+  }
+
+  function setOtaProgressUi(mode, status, details = "") {
+    const running = mode === "running";
+    const success = mode === "success";
+    const error = mode === "error";
+
+    ui.otaProgressVisual.classList.toggle("is-running", running);
+    ui.otaProgressVisual.classList.toggle("is-success", success);
+    ui.otaProgressVisual.classList.toggle("is-error", error);
+
+    ui.otaProgressTitle.textContent = success
+      ? "Η αναβάθμιση ολοκληρώθηκε"
+      : (error ? "Η αναβάθμιση απέτυχε" : "Αναβάθμιση λογισμικού");
+
+    ui.otaProgressStatus.textContent = status;
+    ui.otaProgressDetails.textContent = details;
+    ui.otaProgressCloseBtn.classList.toggle("hidden", running);
+    ui.otaProgressCloseBtn.disabled = running;
+  }
+
+  function updateOtaRunningDetails(extra = "") {
+    if (!otaSession) return;
+    const elapsed = otaElapsedSeconds();
+    const onlineText = otaSession.sawOffline
+      ? (otaSession.sawOnlineAfterStart ? "επανήλθε online" : "offline / αναβάθμιση")
+      : "αναμονή επανεκκίνησης";
+
+    const lines = [
+      `Συσκευή: ${otaSession.id}`,
+      `Έκδοση: ${otaSession.fromVersion} → ${otaSession.targetVersion}`,
+      `Χρόνος: ${elapsed}s`,
+      `Κατάσταση MQTT: ${onlineText}`
+    ];
+
+    if (extra) lines.push(extra);
+    ui.otaProgressDetails.textContent = lines.join("\n");
+  }
+
+  function failOtaBeforeStart(reason, debug = "") {
+    clearOtaAckTimer();
+
+    const pending = otaAwaitingStart;
+    otaAwaitingStart = null;
+
+    if (pending) {
+      adminBusy.delete(pending.id);
+      updateAdminButtons();
+    }
+
+    const message = `OTA δεν ξεκίνησε: ${reason}`;
+    setAdminStatus(debug ? `${message} · ${debug}` : message, "error");
+    showToast(message, 6000);
+  }
+
+  function failActiveOta(reason, debug = "") {
+    if (!otaSession) return;
+
+    clearOtaSessionTimers();
+
+    const session = otaSession;
+    otaSession = null;
+
+    const details = [
+      `Συσκευή: ${session.id}`,
+      `Από: ${session.fromVersion}`,
+      `Στόχος: ${session.targetVersion}`,
+      `Χρόνος: ${Math.max(0, Math.round((Date.now() - session.startedAt) / 1000))}s`,
+      debug ? `Debug: ${debug}` : ""
+    ].filter(Boolean).join("\n");
+
+    setOtaProgressUi("error", reason, details);
+    showToast(`${session.id}: OTA αποτυχία`, 6000);
+  }
+
+  function completeActiveOta(currentVersion) {
+    if (!otaSession) return;
+
+    clearOtaSessionTimers();
+
+    const session = otaSession;
+    otaSession = null;
+
+    const details = [
+      `Συσκευή: ${session.id}`,
+      `Προηγούμενη: ${session.fromVersion}`,
+      `Νέα: ${currentVersion}`,
+      "Το ESP8266 επανήλθε online και επιβεβαίωσε τη νέα έκδοση."
+    ].join("\n");
+
+    setOtaProgressUi(
+      "success",
+      `Firmware ${currentVersion} ενεργό.`,
+      details
+    );
+    showToast(`${session.id}: OTA ${currentVersion} ολοκληρώθηκε`, 6000);
+  }
+
+  function beginConfirmedOta(id, responseData) {
+    if (!otaAwaitingStart || otaAwaitingStart.id !== id) return;
+
+    clearOtaAckTimer();
+
+    const pending = otaAwaitingStart;
+    otaAwaitingStart = null;
+    adminBusy.delete(id);
+    updateAdminButtons();
+
+    otaSession = {
+      id,
+      fromVersion: pending.fromVersion,
+      targetVersion: pending.targetVersion,
+      manifest: pending.manifest,
+      startedAt: Date.now(),
+      sawOffline: false,
+      sawOnlineAfterStart: false,
+      ack: responseData
+    };
+
+    if (ui.adminDialog.open) ui.adminDialog.close();
+
+    ui.otaProgressDevice.textContent = id;
+    ui.otaProgressVersions.textContent =
+      `${pending.fromVersion} → ${pending.targetVersion}`;
+
+    setOtaProgressUi(
+      "running",
+      "Ο ESP8266 αποδέχτηκε το OTA. Γίνεται λήψη, έλεγχος MD5 και εγκατάσταση…"
+    );
+    updateOtaRunningDetails("ACK OTA: state=starting");
+
+    if (!ui.otaProgressDialog.open) ui.otaProgressDialog.showModal();
+
+    otaElapsedTimer = setInterval(() => updateOtaRunningDetails(), 1000);
+
+    otaPollTimer = setInterval(() => {
+      if (!otaSession || otaSession.id !== id) return;
+      if (client && client.connected) requestUpdate(id, false);
+    }, OTA_POLL_MS);
+
+    otaTimeoutTimer = setTimeout(() => {
+      if (!otaSession || otaSession.id !== id) return;
+      const device = devices.get(id);
+      const lastFw = device ? String((device.state || {}).firmware || "?") : "?";
+      failActiveOta(
+        "Δεν επιβεβαιώθηκε η νέα έκδοση μέσα σε 5 λεπτά.",
+        `Τελευταία γνωστή έκδοση: ${lastFw}. Έλεγξε OLED / Recovery / MQTT.`
+      );
+    }, OTA_TOTAL_TIMEOUT_MS);
+
+    setTimeout(() => {
+      if (otaSession && otaSession.id === id) requestUpdate(id, false);
+    }, 7000);
+  }
+
   function openOtaPinDialog(id, manifest) {
     const device = devices.get(id);
     if (!device) return;
@@ -683,11 +872,48 @@
       return;
     }
 
-    const firmwareUrl = OTA_RAW_BASE_URL + encodeURIComponent(manifest.file);
-    sendAdmin(
-      `ota_https|${manifest.size}|${manifest.md5}|${firmwareUrl}`,
-      `Έναρξη OTA προς firmware ${manifest.version}…`
+    clearOtaAckTimer();
+
+    const fromVersion = String((device.state || {}).firmware || "?");
+    otaAwaitingStart = {
+      id,
+      fromVersion,
+      targetVersion: manifest.version,
+      manifest,
+      sentAt: Date.now()
+    };
+
+    adminBusy.add(id);
+    updateAdminButtons();
+    setAdminStatus(
+      `Αποστολή OTA ${fromVersion} → ${manifest.version}. Αναμονή επιβεβαίωσης από ESP8266…`
     );
+
+    const firmwareUrl = OTA_RAW_BASE_URL + encodeURIComponent(manifest.file);
+    const command =
+      `ota_https|${manifest.size}|${manifest.md5}|${firmwareUrl}`;
+
+    const sent = publish(id, "admin/request", command, (err) => {
+      if (!err) return;
+      if (!otaAwaitingStart || otaAwaitingStart.id !== id) return;
+      failOtaBeforeStart(
+        "Αποτυχία MQTT publish.",
+        err.message || String(err)
+      );
+    });
+
+    if (!sent) {
+      failOtaBeforeStart("Δεν υπάρχει ενεργή MQTT σύνδεση.");
+      return;
+    }
+
+    otaAckTimer = setTimeout(() => {
+      if (!otaAwaitingStart || otaAwaitingStart.id !== id) return;
+      failOtaBeforeStart(
+        "Δεν ελήφθη επιβεβαίωση έναρξης από τον ESP8266.",
+        "Timeout 12s στο admin/response."
+      );
+    }, OTA_ACK_TIMEOUT_MS);
   }
 
   async function startRemoteOta(id) {
@@ -826,14 +1052,18 @@
   }
 
   function handleAdminResponse(id, text) {
-    adminBusy.delete(id);
-    updateAdminButtons();
-
     let data;
     try {
       data = JSON.parse(text);
     } catch (_) {
-      if (adminTargetId === id) setAdminStatus("Μη έγκυρη admin απάντηση.", "error");
+      if (otaAwaitingStart && otaAwaitingStart.id === id) {
+        failOtaBeforeStart(
+          "Μη έγκυρη απάντηση από ESP8266.",
+          `Payload: ${String(text).slice(0, 140)}`
+        );
+      } else if (adminTargetId === id) {
+        setAdminStatus("Μη έγκυρη admin απάντηση.", "error");
+      }
       return;
     }
 
@@ -841,19 +1071,42 @@
       invalid_z_values: "Οι τιμές Ζ1/Ζ2 δεν είναι έγκυρες.",
       time_not_valid: "Ο ESP δεν έχει ακόμα έγκυρη ημερομηνία/ώρα από NTP.",
       dds238_read_failed: "Απέτυχε η ανάγνωση DDS238.",
-      jsy_read_failed: "Απέτυχε η ανάγνωση JSY-MK-333."
+      jsy_read_failed: "Απέτυχε η ανάγνωση JSY-MK-333.",
+      missing_parameters: "Λείπουν παράμετροι OTA.",
+      invalid_https_url: "Το OTA URL δεν είναι έγκυρο.",
+      invalid_command: "Ο ESP8266 δεν αναγνώρισε την OTA εντολή."
     };
 
     const ok = Boolean(data.ok);
-    const otaStarting = ok && data.cmd === "ota_https" && data.state === "starting";
-    const msg = otaStarting
-      ? "OTA ξεκίνησε. Ο ESP κατεβάζει και επαληθεύει το νέο firmware…"
-      : (ok
-          ? `OK: ${data.cmd || "admin"}`
-          : (errorMessages[data.error] || `Σφάλμα: ${data.error || "άγνωστο"}`));
+    const otaResponse = data.cmd === "ota_https";
+    const otaStarting = ok && otaResponse && data.state === "starting";
+
+    if (otaStarting) {
+      beginConfirmedOta(id, data);
+      showToast(
+        `${id}: OTA ξεκίνησε επιτυχώς · ${data.from || "?"} → ${otaSession ? otaSession.targetVersion : "?"}`,
+        6500
+      );
+      return;
+    }
+
+    if (otaResponse && otaAwaitingStart && otaAwaitingStart.id === id) {
+      const reason = ok
+        ? `Μη αναμενόμενη OTA απάντηση: ${data.state || "χωρίς state"}`
+        : (errorMessages[data.error] || `ESP error: ${data.error || "άγνωστο"}`);
+      failOtaBeforeStart(reason, `admin/response: ${text.slice(0, 180)}`);
+      return;
+    }
+
+    adminBusy.delete(id);
+    updateAdminButtons();
+
+    const msg = ok
+      ? `OK: ${data.cmd || "admin"}`
+      : (errorMessages[data.error] || `Σφάλμα: ${data.error || "άγνωστο"}`);
 
     if (adminTargetId === id) setAdminStatus(msg, ok ? "ok" : "error");
-    showToast(`${id}: ${msg}`, otaStarting ? 6500 : 2600);
+    showToast(`${id}: ${msg}`);
 
     if (ok && (data.cmd === "store_deh" ||
                data.cmd === "reset_store_deh" ||
@@ -996,6 +1249,22 @@
       if (parsed.suffix === "status") {
         device.online = text.trim().toLowerCase() === "online";
         renderAll();
+
+        if (otaSession && otaSession.id === device.id) {
+          if (!device.online) {
+            otaSession.sawOffline = true;
+            ui.otaProgressStatus.textContent =
+              "Ο ESP8266 είναι προσωρινά offline. Η αναβάθμιση / επανεκκίνηση βρίσκεται σε εξέλιξη…";
+            updateOtaRunningDetails("MQTT status: offline");
+          } else if (otaSession.sawOffline) {
+            otaSession.sawOnlineAfterStart = true;
+            ui.otaProgressStatus.textContent =
+              "Ο ESP8266 επανήλθε online. Επιβεβαιώνεται η νέα έκδοση…";
+            updateOtaRunningDetails("MQTT status: online μετά το OTA");
+            setTimeout(() => requestUpdate(device.id, false), 250);
+          }
+        }
+
         if (device.online && (!device.state || !Object.keys(device.state).length)) {
           setTimeout(() => requestUpdate(device.id, false), 100);
         }
@@ -1008,6 +1277,24 @@
           device.lastReceived = new Date();
           device.online = true;
           renderAll();
+
+          if (otaSession && otaSession.id === device.id) {
+            const currentFw = String((device.state || {}).firmware || "?");
+            if (compareFirmwareVersions(currentFw, otaSession.targetVersion) === 0) {
+              completeActiveOta(currentFw);
+            } else if (
+              otaSession.sawOffline &&
+              otaSession.sawOnlineAfterStart &&
+              Date.now() - otaSession.startedAt > 8000
+            ) {
+              failActiveOta(
+                "Ο ESP8266 επανήλθε, αλλά δεν τρέχει τη ζητούμενη έκδοση.",
+                `Τρέχουσα: ${currentFw} · αναμενόμενη: ${otaSession.targetVersion}`
+              );
+            } else {
+              updateOtaRunningDetails(`Τελευταία state έκδοση: ${currentFw}`);
+            }
+          }
 
           if (adminTargetId === device.id && ui.adminDialog.open) {
             refreshDualZoneSettings(device);
@@ -1091,6 +1378,18 @@
 
     ui.otaPinDialog.close();
     sendPendingRemoteOta();
+  });
+
+  ui.otaProgressCloseBtn.addEventListener("click", () => {
+    if (otaSession) return;
+    ui.otaProgressDialog.close();
+  });
+
+  ui.otaProgressDialog.addEventListener("cancel", (event) => {
+    if (otaSession) {
+      event.preventDefault();
+      return;
+    }
   });
 
   ui.storeDehBtn.addEventListener("click", () => {
