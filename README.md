@@ -1,4 +1,4 @@
-# Energy DDS / JSY — PWA v1.7
+# Energy DDS / JSY — PWA v1.8
 
 Κοινή web/PWA εφαρμογή για DDS238 και JSY-MK-333 μέσω HiveMQ Cloud / MQTT over WebSocket.
 
@@ -164,3 +164,18 @@ JSY dashboard:
 - θετική Διαφορά κόκκινη, αρνητική κίτρινη
 
 Η v1.7 κρατά επίσης τον αυτόματο PWA updater της v1.5.
+
+
+## App v1.8
+
+Προστέθηκε remote firmware OTA μέσα στις **ΡΥΘΜΙΣΕΙΣ** κάθε συσκευής.
+
+- κουμπί **OTA-UPDATE** ανά συσκευή
+- απαιτεί firmware **2.28+** πριν από credential-free OTA
+- ζητά masked αριθμητικό PIN πριν ξεκινήσει
+- διαβάζει δυναμικά το public OTA manifest από `ApostolosGit/ESP8266-OTA`
+- ελέγχει ότι το firmware του manifest αντιστοιχεί στον τύπο του μετρητή
+- ζητά τελική επιβεβαίωση με τρέχουσα και νέα firmware έκδοση
+- στέλνει `ota_https|size|md5|url` στο `home/energy/<device>/admin/request`
+- εμφανίζει επιβεβαίωση όταν ο ESP δεχτεί την OTA εντολή και ξεκινήσει το HTTPS download
+- το service-worker cache αυξήθηκε σε `v1.8.0` για αυτόματο PWA refresh
