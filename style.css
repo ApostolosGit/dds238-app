@@ -1161,3 +1161,49 @@ input:focus { border-color: #2b9c88; box-shadow: 0 0 0 3px rgba(43,156,136,.13);
     border-top: 1px solid var(--line);
   }
 }
+
+
+/* ===== v2.0 Utility reading history ===== */
+.utility-history-dialog { max-width: 880px; }
+.utility-history-content h3 { margin: 18px 0 10px; }
+.history-table-wrap {
+  width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+.utility-history-table {
+  width: 100%;
+  border-collapse: collapse;
+  min-width: 560px;
+}
+.utility-history-table th,
+.utility-history-table td {
+  padding: 9px 8px;
+  border-bottom: 1px solid #dbe5ea;
+  text-align: right;
+  white-space: nowrap;
+  font-size: .76rem;
+}
+.utility-history-table th:first-child,
+.utility-history-table td:first-child { text-align: left; }
+.utility-history-table th {
+  color: #60717e;
+  font-size: .68rem;
+  text-transform: uppercase;
+}
+.history-actions {
+  display: flex;
+  gap: 6px;
+  justify-content: flex-end;
+}
+.history-btn {
+  padding: 7px 9px;
+  font-size: .66rem;
+  min-height: 32px;
+}
+.history-btn:disabled { opacity: .4; cursor: not-allowed; }
+
+@media (max-width: 620px) {
+  .utility-history-dialog { width: calc(100% - 14px); }
+  .utility-history-table { min-width: 650px; }
+}
