@@ -15,7 +15,7 @@
     path: "/mqtt"
   };
 
-  const APP_VERSION = "1.8";
+  const APP_VERSION = "1.9";
   const AUTO_REFRESH_MS = 60000;
   const OTA_PIN = "12134";
   const OTA_MANIFEST_URL = "https://raw.githubusercontent.com/ApostolosGit/ESP8266-OTA/main/manifest.txt";
@@ -629,9 +629,9 @@
     if (!device) return;
 
     const fw = String((device.state || {}).firmware || "");
-    if (!firmwareAtLeast(fw, 2, 28)) {
-      setAdminStatus("Το remote OTA προς v2.29+ απαιτεί πρώτα firmware 2.28.", "error");
-      showToast(`${adminTargetId}: απαιτεί firmware 2.28+`);
+    if (!firmwareAtLeast(fw, 2, 29)) {
+      setAdminStatus("Το remote OTA προς v2.29+ απαιτεί πρώτα firmware 2.29.", "error");
+      showToast(`${adminTargetId}: απαιτεί firmware 2.29+`);
       return;
     }
 
@@ -702,9 +702,9 @@
     ui.adminTitle.textContent = `Ρυθμίσεις · ${id}`;
     refreshDualZoneSettings(device);
     const fw = String((device.state || {}).firmware || "?");
-    ui.otaTargetInfo.textContent = firmwareAtLeast(fw, 2, 28)
+    ui.otaTargetInfo.textContent = firmwareAtLeast(fw, 2, 29)
       ? `Τρέχον firmware: ${fw}. Έτοιμο για remote OTA.`
-      : `Τρέχον firmware: ${fw}. Το remote OTA προς credential-free firmware απαιτεί 2.28+.`;
+      : `Τρέχον firmware: ${fw}. Το remote OTA προς credential-free firmware απαιτεί 2.29+.`;
     setAdminStatus("Έτοιμο.", "ok");
     updateAdminButtons();
     ui.adminDialog.showModal();
@@ -727,7 +727,7 @@
       const fwForOta = deviceForOta ? String((deviceForOta.state || {}).firmware || "") : "";
       ui.otaUpdateBtn.disabled =
         !adminTargetId || busy || !connected || otaManifestLoading ||
-        !firmwareAtLeast(fwForOta, 2, 28);
+        !firmwareAtLeast(fwForOta, 2, 29);
     }
     ui.dehAdminInput.disabled = !adminTargetId || busy || !connected;
 
