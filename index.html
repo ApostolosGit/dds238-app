@@ -9,7 +9,7 @@
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="icon" href="icon-192.png" sizes="192x192">
   <link rel="apple-touch-icon" href="icon-192.png">
-  <link rel="stylesheet" href="style.css?v=1.10.0">
+  <link rel="stylesheet" href="style.css?v=1.12.0">
 </head>
 <body>
   <div class="app-shell">
@@ -56,7 +56,7 @@
     </main>
 
     <footer>
-      <span>Energy DDS / JSY v1.10</span>
+      <span>Energy DDS / JSY v1.12</span>
       <span>Auto discovery · MQTT wildcard · refresh 60″</span>
     </footer>
   </div>
@@ -174,9 +174,46 @@
     </form>
   </dialog>
 
+  <dialog id="otaProgressDialog" class="ota-progress-dialog">
+    <div class="ota-progress-body">
+      <div class="dialog-head">
+        <div>
+          <p class="eyebrow">SOFTWARE UPDATE</p>
+          <h2 id="otaProgressTitle">Αναβάθμιση λογισμικού</h2>
+        </div>
+      </div>
+
+      <div id="otaProgressVisual" class="ota-progress-visual is-running" aria-hidden="true">
+        <div class="ota-spinner"></div>
+        <div class="ota-result-mark">✓</div>
+      </div>
+
+      <p id="otaProgressStatus" class="ota-progress-status">
+        Αναμονή επιβεβαίωσης από ESP8266…
+      </p>
+
+      <div class="ota-version-summary">
+        <div>
+          <span>Συσκευή</span>
+          <strong id="otaProgressDevice">—</strong>
+        </div>
+        <div>
+          <span>Firmware</span>
+          <strong id="otaProgressVersions">—</strong>
+        </div>
+      </div>
+
+      <pre id="otaProgressDetails" class="ota-progress-details"></pre>
+
+      <div class="dialog-actions">
+        <button id="otaProgressCloseBtn" class="primary-btn hidden" type="button">ΚΛΕΙΣΙΜΟ</button>
+      </div>
+    </div>
+  </dialog>
+
   <div id="toast" class="toast hidden" role="status" aria-live="polite"></div>
 
   <script src="https://unpkg.com/mqtt@5.15.2/dist/mqtt.min.js"></script>
-  <script src="app.js?v=1.10.0"></script>
+  <script src="app.js?v=1.12.0"></script>
 </body>
 </html>
