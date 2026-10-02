@@ -15,7 +15,7 @@
     path: "/mqtt"
   };
 
-  const APP_VERSION = "1.9";
+  const APP_VERSION = "1.10";
   const AUTO_REFRESH_MS = 60000;
   const OTA_PIN = "12134";
   const OTA_MANIFEST_URL = "https://raw.githubusercontent.com/ApostolosGit/ESP8266-OTA/main/manifest.txt";
@@ -30,6 +30,7 @@
   let deferredInstallPrompt = null;
   let adminTargetId = null;
   let otaTargetId = null;
+  let otaPendingManifest = null;
   let otaManifestLoading = false;
 
   const $ = (id) => document.getElementById(id);
@@ -623,25 +624,52 @@
     return parseOtaManifest(await response.text());
   }
 
-  function openOtaPinDialog() {
-    if (!adminTargetId) return;
-    const device = devices.get(adminTargetId);
+  function openOtaPinDialog(id, manifest) {
+    const device = devices.get(id);
     if (!device) return;
 
     const fw = String((device.state || {}).firmware || "");
-    if (!firmwareAtLeast(fw, 2, 29)) {
-      setAdminStatus("Το remote OTA προς v2.29+ απαιτεί πρώτα firmware 2.29.", "error");
-      showToast(`${adminTargetId}: απαιτεί firmware 2.29+`);
-      return;
-    }
+    otaTargetId = id;
+    otaPendingManifest = manifest;
 
-    otaTargetId = adminTargetId;
     ui.otaPinInput.value = "";
     ui.otaPinError.textContent = "";
     ui.otaPinError.classList.add("hidden");
-    ui.otaPinTarget.textContent = `Συσκευή: ${otaTargetId} · firmware ${fw}`;
+    ui.otaPinTarget.textContent =
+      `Συσκευή: ${id} · ${fw} → ${manifest.version}`;
     ui.otaPinDialog.showModal();
     setTimeout(() => ui.otaPinInput.focus(), 50);
+  }
+
+  function sendPendingRemoteOta() {
+    const id = otaTargetId;
+    const manifest = otaPendingManifest;
+
+    otaTargetId = null;
+    otaPendingManifest = null;
+
+    if (!id || !manifest) {
+      setAdminStatus("Δεν υπάρχει έτοιμη OTA εντολή.", "error");
+      return;
+    }
+
+    const device = devices.get(id);
+    if (!device) {
+      showToast("Η συσκευή δεν είναι πλέον διαθέσιμη.");
+      return;
+    }
+
+    if (!client || !client.connected) {
+      setAdminStatus("Δεν υπάρχει σύνδεση με HiveMQ.", "error");
+      showToast("Δεν υπάρχει σύνδεση με HiveMQ.");
+      return;
+    }
+
+    const firmwareUrl = OTA_RAW_BASE_URL + encodeURIComponent(manifest.file);
+    sendAdmin(
+      `ota_https|${manifest.size}|${manifest.md5}|${firmwareUrl}`,
+      `Έναρξη OTA προς firmware ${manifest.version}…`
+    );
   }
 
   async function startRemoteOta(id) {
@@ -652,6 +680,13 @@
     }
     if (!client || !client.connected) {
       showToast("Δεν υπάρχει σύνδεση με HiveMQ.");
+      return;
+    }
+
+    const fw = String((device.state || {}).firmware || "");
+    if (!firmwareAtLeast(fw, 2, 29)) {
+      setAdminStatus("Το remote OTA απαιτεί πρώτα firmware 2.29+.", "error");
+      showToast(`${id}: απαιτεί firmware 2.29+`);
       return;
     }
 
@@ -674,16 +709,16 @@
         `Νέα: ${manifest.version}${oledText}\n\n` +
         "Ο ESP θα αποσυνδεθεί προσωρινά από MQTT και θα επανεκκινήσει. Συνέχεια;"
       );
+
       if (!confirmed) {
         setAdminStatus("Το OTA ακυρώθηκε.");
         return;
       }
 
-      const firmwareUrl = OTA_RAW_BASE_URL + encodeURIComponent(manifest.file);
-      sendAdmin(
-        `ota_https|${manifest.size}|${manifest.md5}|${firmwareUrl}`,
-        `Έναρξη OTA προς firmware ${manifest.version}…`
-      );
+      // v1.10: το PIN ζητείται ΜΕΤΑ την τελική επιβεβαίωση.
+      // Καμία MQTT OTA εντολή δεν αποστέλλεται πριν επαληθευτεί το PIN.
+      openOtaPinDialog(id, manifest);
+      setAdminStatus("Αναμονή PIN για έναρξη OTA.");
     } catch (err) {
       const message = err && err.message ? err.message : String(err);
       setAdminStatus(`OTA: ${message}`, "error");
@@ -998,9 +1033,23 @@
 
   ui.closeAdminBtn.addEventListener("click", () => ui.adminDialog.close());
 
-  ui.otaUpdateBtn.addEventListener("click", openOtaPinDialog);
-  ui.closeOtaPinBtn.addEventListener("click", () => ui.otaPinDialog.close());
-  ui.cancelOtaPinBtn.addEventListener("click", () => ui.otaPinDialog.close());
+  ui.otaUpdateBtn.addEventListener("click", () => {
+    if (adminTargetId) startRemoteOta(adminTargetId);
+  });
+
+  ui.closeOtaPinBtn.addEventListener("click", () => {
+    otaTargetId = null;
+    otaPendingManifest = null;
+    ui.otaPinDialog.close();
+    setAdminStatus("Το OTA ακυρώθηκε.");
+  });
+
+  ui.cancelOtaPinBtn.addEventListener("click", () => {
+    otaTargetId = null;
+    otaPendingManifest = null;
+    ui.otaPinDialog.close();
+    setAdminStatus("Το OTA ακυρώθηκε.");
+  });
 
   ui.otaPinForm.addEventListener("submit", (event) => {
     event.preventDefault();
@@ -1013,10 +1062,8 @@
       return;
     }
 
-    const id = otaTargetId;
-    otaTargetId = null;
     ui.otaPinDialog.close();
-    if (id) startRemoteOta(id);
+    sendPendingRemoteOta();
   });
 
   ui.storeDehBtn.addEventListener("click", () => {
