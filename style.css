@@ -331,6 +331,7 @@ dialog {
 dialog::backdrop { background: rgba(0,9,16,.78); backdrop-filter: blur(5px); }
 #settingsForm,
 #otaPinForm,
+.ota-progress-body,
 .admin-dialog-body { padding: 22px; }
 .dialog-head {
   display: flex;
@@ -393,6 +394,99 @@ input:focus { border-color: #2b9c88; box-shadow: 0 0 0 3px rgba(43,156,136,.13);
 .admin-status { margin: 10px 0 0; min-height: 1.2em; color: #6f7f8d; font-size: .74rem; font-weight: 700; }
 .admin-status.is-ok { color: #168f7a; }
 .admin-status.is-error { color: #a21e35; }
+
+.ota-progress-dialog { max-width: 520px; }
+.ota-progress-body { min-width: min(460px, calc(100vw - 36px)); }
+.ota-progress-visual {
+  width: 88px;
+  height: 88px;
+  margin: 8px auto 18px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: #eaf3f6;
+  border: 1px solid #d2e1e7;
+}
+.ota-spinner {
+  width: 42px;
+  height: 42px;
+  border: 5px solid rgba(22,143,122,.18);
+  border-top-color: #168f7a;
+  border-radius: 50%;
+  animation: ota-spin .9s linear infinite;
+}
+.ota-result-mark {
+  display: none;
+  font-size: 2.2rem;
+  font-weight: 900;
+  line-height: 1;
+}
+.ota-progress-visual.is-success {
+  background: #e8f7f1;
+  border-color: #9dd8c8;
+}
+.ota-progress-visual.is-success .ota-spinner,
+.ota-progress-visual.is-error .ota-spinner { display: none; }
+.ota-progress-visual.is-success .ota-result-mark {
+  display: block;
+  color: #168f7a;
+}
+.ota-progress-visual.is-error {
+  background: #fff0f2;
+  border-color: #e0adb5;
+}
+.ota-progress-visual.is-error .ota-result-mark {
+  display: block;
+  color: #a21e35;
+}
+.ota-progress-visual.is-error .ota-result-mark::before { content: "×"; }
+.ota-progress-visual.is-error .ota-result-mark { font-size: 0; }
+.ota-progress-visual.is-error .ota-result-mark::before { font-size: 2.5rem; }
+.ota-progress-status {
+  margin: 0 auto 16px;
+  max-width: 440px;
+  color: #304454;
+  font-size: .9rem;
+  font-weight: 800;
+  line-height: 1.5;
+  text-align: center;
+}
+.ota-version-summary {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin: 14px 0;
+}
+.ota-version-summary > div {
+  padding: 12px;
+  border-radius: 12px;
+  background: #f3f7f9;
+  border: 1px solid #dbe5ea;
+}
+.ota-version-summary span {
+  display: block;
+  margin-bottom: 4px;
+  color: #71818e;
+  font-size: .68rem;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+.ota-version-summary strong {
+  color: #102633;
+  font-size: .9rem;
+}
+.ota-progress-details {
+  min-height: 96px;
+  margin: 10px 0 0;
+  padding: 12px;
+  border-radius: 12px;
+  background: #08131d;
+  color: #d6e2ea;
+  white-space: pre-wrap;
+  word-break: break-word;
+  font: 600 .72rem/1.55 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+@keyframes ota-spin { to { transform: rotate(360deg); } }
 
 .toast {
   position: fixed;
