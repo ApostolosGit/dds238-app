@@ -56,7 +56,7 @@
     </main>
 
     <footer>
-      <span>Energy DDS / JSY v1.7</span>
+      <span>Energy DDS / JSY v1.8</span>
       <span>Auto discovery · MQTT wildcard · refresh 60″</span>
     </footer>
   </div>
@@ -137,8 +137,41 @@
         <button id="clearDailyBtn" class="danger-outline-btn admin-btn" type="button">CLEAR DAILY STATS</button>
       </div>
 
+      <section class="settings-section ota-settings">
+        <p class="eyebrow">FIRMWARE</p>
+        <h3>OTA Update</h3>
+        <p id="otaTargetInfo" class="admin-help">Επίλεξε OTA-UPDATE για έλεγχο της διαθέσιμης έκδοσης.</p>
+        <button id="otaUpdateBtn" class="primary-btn admin-btn full-btn" type="button">OTA-UPDATE</button>
+        <p class="admin-help">Η αναβάθμιση γίνεται από Internet μέσω MQTT + HTTPS. Ο ESP θα αποσυνδεθεί προσωρινά και θα επανεκκινήσει όταν ολοκληρωθεί.</p>
+      </section>
+
       <p id="adminStatus" class="admin-status">Έτοιμο.</p>
     </div>
+  </dialog>
+
+  <dialog id="otaPinDialog">
+    <form id="otaPinForm" method="dialog">
+      <div class="dialog-head">
+        <div>
+          <p class="eyebrow">OTA AUTHORIZATION</p>
+          <h2>PIN αναβάθμισης</h2>
+        </div>
+        <button id="closeOtaPinBtn" class="icon-btn light" type="button" aria-label="Κλείσιμο">×</button>
+      </div>
+
+      <label>
+        PIN
+        <input id="otaPinInput" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="5" autocomplete="off" required placeholder="•••••">
+      </label>
+
+      <p id="otaPinTarget" class="privacy-note"></p>
+      <div id="otaPinError" class="connection-error hidden" role="alert"></div>
+
+      <div class="dialog-actions">
+        <button id="cancelOtaPinBtn" class="secondary-btn" type="button">ΑΚΥΡΩΣΗ</button>
+        <button class="primary-btn" type="submit">ΣΥΝΕΧΕΙΑ</button>
+      </div>
+    </form>
   </dialog>
 
   <div id="toast" class="toast hidden" role="status" aria-live="polite"></div>
