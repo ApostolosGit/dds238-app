@@ -15,6 +15,7 @@
     path: "/mqtt"
   };
 
+  const APP_VERSION = "1.8";
   const AUTO_REFRESH_MS = 60000;
   const OTA_PIN = "12134";
   const OTA_MANIFEST_URL = "https://raw.githubusercontent.com/ApostolosGit/ESP8266-OTA/main/manifest.txt";
@@ -1134,7 +1135,7 @@
   }
 
   const footerSpans = document.querySelectorAll("footer span");
-  if (footerSpans[0]) footerSpans[0].textContent = "Energy DDS / JSY v1.7";
+  if (footerSpans[0]) footerSpans[0].textContent = `Energy DDS / JSY v${APP_VERSION}`;
   if (footerSpans[1]) footerSpans[1].textContent = "Auto discovery · Z1/Z2 · refresh 60″";
 
   restoreSettings();
