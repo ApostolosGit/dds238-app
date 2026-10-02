@@ -9,7 +9,7 @@
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="icon" href="icon-192.png" sizes="192x192">
   <link rel="apple-touch-icon" href="icon-192.png">
-  <link rel="stylesheet" href="style.css?v=1.12.0">
+  <link rel="stylesheet" href="style.css?v=2.0.0">
 </head>
 <body>
   <div class="app-shell">
@@ -56,7 +56,7 @@
     </main>
 
     <footer>
-      <span>Energy DDS / JSY v1.12</span>
+      <span>Energy DDS / JSY v2.0</span>
       <span>Auto discovery · MQTT wildcard · refresh 60″</span>
     </footer>
   </div>
@@ -117,25 +117,50 @@
         <button id="closeAdminBtn" class="icon-btn light" type="button" aria-label="Κλείσιμο">×</button>
       </div>
 
-      <section id="monoZoneSettings" class="settings-section mono-zone-settings">
-        <p class="eyebrow">ΜΟΝΟΖΩΝΙΚΟ</p>
-        <label>
-          Νέα τιμή Ζ (kWh)
-          <input id="dehAdminInput" type="number" inputmode="decimal" min="0.01" max="999998.99" step="0.01" placeholder="π.χ. 34650.25">
-        </label>
+      <section id="utilityReadingSettings" class="settings-section utility-reading-settings">
+        <p class="eyebrow">ΜΕΤΡΗΣΗ ΔΕΗ</p>
+        <h3 id="utilityReadingTitle">Νέα επίσημη μέτρηση</h3>
 
-        <div class="admin-action-grid">
-          <button id="storeDehBtn" class="primary-btn admin-btn" type="button">STORE Ζ</button>
-          <button id="resetStoreDehBtn" class="danger-btn admin-btn" type="button">RESET + STORE Ζ</button>
+        <div class="form-grid">
+          <label>
+            Ημερομηνία μέτρησης
+            <input id="utilityDateInput" type="date" required>
+          </label>
+          <label>
+            Ώρα — αν είναι γνωστή
+            <input id="utilityTimeInput" type="time">
+          </label>
         </div>
 
-        <p class="admin-help"><b>STORE Ζ:</b> η τιμή γίνεται νέο Ζ reference και Ζ now. <b>RESET + STORE Ζ:</b> καθαρίζει daily και drift/calibration history και ξεκινά καθαρά.</p>
-      </section>
+        <p class="admin-help">Αν η ώρα μείνει κενή, ο ESP χρησιμοποιεί εσωτερικά το γνωστό παράθυρο μέτρησης 08:00–18:00.</p>
 
-      <div class="admin-action-grid">
-        <button id="exportDailyBtn" class="secondary-btn admin-btn" type="button">EXPORT DAILY CSV</button>
-        <button id="clearDailyBtn" class="danger-outline-btn admin-btn" type="button">CLEAR DAILY STATS</button>
-      </div>
+        <div id="monoReadingFields">
+          <label>
+            Ένδειξη Ζ (kWh)
+            <input id="utilityZInput" type="number" inputmode="decimal" min="0.01" max="999998.99" step="0.01" placeholder="π.χ. 35255.00">
+          </label>
+        </div>
+
+        <div id="dualReadingFields" class="form-grid hidden">
+          <label>
+            Ένδειξη Ζ1 (kWh)
+            <input id="utilityZ1Input" type="number" inputmode="decimal" min="0.01" max="999998.99" step="0.01">
+          </label>
+          <label>
+            Ένδειξη Ζ2 (kWh)
+            <input id="utilityZ2Input" type="number" inputmode="decimal" min="0.01" max="999998.99" step="0.01">
+          </label>
+        </div>
+
+        <p id="utilityEditInfo" class="admin-help hidden"></p>
+
+        <div class="admin-action-grid">
+          <button id="saveUtilityReadingBtn" class="primary-btn admin-btn" type="button">ΚΑΤΑΧΩΡΗΣΗ</button>
+          <button id="cancelUtilityEditBtn" class="secondary-btn admin-btn hidden" type="button">ΑΚΥΡΩΣΗ ΔΙΟΡΘΩΣΗΣ</button>
+        </div>
+
+        <button id="utilityHistoryBtn" class="secondary-btn admin-btn full-btn" type="button">ΙΣΤΟΡΙΚΟ ΜΕΤΡΗΣΕΩΝ ΔΕΗ</button>
+      </section>
 
       <section class="settings-section ota-settings">
         <p class="eyebrow">FIRMWARE</p>
@@ -146,6 +171,22 @@
       </section>
 
       <p id="adminStatus" class="admin-status">Έτοιμο.</p>
+    </div>
+  </dialog>
+
+  <dialog id="utilityHistoryDialog" class="utility-history-dialog">
+    <div class="admin-dialog-body">
+      <div class="dialog-head">
+        <div>
+          <p class="eyebrow">ΙΣΤΟΡΙΚΟ ΔΕΗ</p>
+          <h2 id="utilityHistoryTitle">Μετρήσεις ΔΕΗ</h2>
+        </div>
+        <button id="closeUtilityHistoryBtn" class="icon-btn light" type="button" aria-label="Κλείσιμο">×</button>
+      </div>
+
+      <div id="utilityHistoryContent" class="utility-history-content">
+        <p class="admin-help">Δεν έχουν φορτωθεί μετρήσεις.</p>
+      </div>
     </div>
   </dialog>
 
@@ -214,6 +255,6 @@
   <div id="toast" class="toast hidden" role="status" aria-live="polite"></div>
 
   <script src="https://unpkg.com/mqtt@5.15.2/dist/mqtt.min.js"></script>
-  <script src="app.js?v=1.12.0"></script>
+  <script src="app.js?v=2.0.0"></script>
 </body>
 </html>
