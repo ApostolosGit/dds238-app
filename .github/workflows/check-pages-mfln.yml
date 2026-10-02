@@ -1,0 +1,28 @@
+name: Check GitHub Pages MFLN
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/check-pages-mfln.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Probe GitHub Pages TLS 1.2 MFLN
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo | openssl s_client             -connect apostolosgit.github.io:443             -servername apostolosgit.github.io             -tls1_2             -maxfraglen 4096             -tlsextdebug 2>&1 | tee /tmp/tls.txt >/dev/null
+          if grep -qi -E 'max fragment|max_fragment|fragment length' /tmp/tls.txt; then
+            echo "MFLN=YES"
+            grep -i -E 'max fragment|max_fragment|fragment length' /tmp/tls.txt
+          else
+            echo "MFLN=NO"
+          fi
+          grep -i -E 'Protocol  :|Cipher    :' /tmp/tls.txt | head -n 2 || true
