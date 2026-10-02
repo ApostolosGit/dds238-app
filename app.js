@@ -1138,6 +1138,23 @@
     });
   }
 
+  function utilitySpanMessage(data) {
+    if (!data || data.mapped !== true) {
+      return "Η μέτρηση αποθηκεύτηκε. Δεν υπάρχει αρκετό εσωτερικό ιστορικό για να αντιστοιχιστεί ακόμη η ημερομηνία.";
+    }
+
+    if (Object.prototype.hasOwnProperty.call(data, "z1_span")) {
+      const a = Number(data.z1_span) || 0;
+      const b = Number(data.z2_span) || 0;
+      if (a <= 0 && b <= 0) return "Η μέτρηση αποθηκεύτηκε με ακριβή ώρα.";
+      return `Η μέτρηση αποθηκεύτηκε. Εσωτερικό span: Ζ1 ${formatNumber(a, 2)} kWh · Ζ2 ${formatNumber(b, 2)} kWh.`;
+    }
+
+    const span = Number(data.span) || 0;
+    if (span <= 0) return "Η μέτρηση αποθηκεύτηκε με ακριβή ώρα.";
+    return `Η μέτρηση αποθηκεύτηκε. Εσωτερικό span 08:00–18:00: ${formatNumber(span, 2)} kWh.`;
+  }
+
   function handleAdminResponse(id, text) {
     let data;
     try {
@@ -1155,13 +1172,17 @@
     }
 
     const errorMessages = {
-      invalid_z_values: "Οι τιμές Ζ1/Ζ2 δεν είναι έγκυρες.",
+      invalid_reading: "Τα στοιχεία της μέτρησης ΔΕΗ δεν είναι έγκυρα.",
+      invalid_reading_id: "Η εγγραφή ΔΕΗ δεν είναι έγκυρη.",
+      reading_not_found: "Η μέτρηση ΔΕΗ δεν βρέθηκε.",
+      storage_failed: "Απέτυχε η αποθήκευση στο ESP8266.",
+      tariff_mode_mismatch: "Η μέτρηση δεν ταιριάζει με τον ενεργό τύπο Ζ / Ζ1-Ζ2.",
       time_not_valid: "Ο ESP δεν έχει ακόμα έγκυρη ημερομηνία/ώρα από NTP.",
       dds238_read_failed: "Απέτυχε η ανάγνωση DDS238.",
       jsy_read_failed: "Απέτυχε η ανάγνωση JSY-MK-333.",
       missing_parameters: "Λείπουν παράμετροι OTA.",
       invalid_https_url: "Το OTA URL δεν είναι έγκυρο.",
-      invalid_command: "Ο ESP8266 δεν αναγνώρισε την OTA εντολή."
+      invalid_command: "Ο ESP8266 δεν αναγνώρισε την εντολή."
     };
 
     const ok = Boolean(data.ok);
@@ -1188,55 +1209,237 @@
     adminBusy.delete(id);
     updateAdminButtons();
 
-    const msg = ok
-      ? `OK: ${data.cmd || "admin"}`
-      : (errorMessages[data.error] || `Σφάλμα: ${data.error || "άγνωστο"}`);
-
-    if (adminTargetId === id) setAdminStatus(msg, ok ? "ok" : "error");
-    showToast(`${id}: ${msg}`);
-
-    if (ok && (data.cmd === "store_deh" ||
-               data.cmd === "reset_store_deh" ||
-               data.cmd === "dualzone_set")) {
-      setTimeout(() => requestUpdate(id, false), 250);
+    if (!ok) {
+      const msg = errorMessages[data.error] || `Σφάλμα: ${data.error || "άγνωστο"}`;
+      if (adminTargetId === id) setAdminStatus(msg, "error");
+      showToast(`${id}: ${msg}`, 5000);
+      return;
     }
+
+    if (data.cmd === "utility_reading_add" ||
+        data.cmd === "utility_reading_update") {
+      const msg = utilitySpanMessage(data);
+      if (adminTargetId === id) {
+        setAdminStatus(msg, "ok");
+        resetUtilityEditor();
+      }
+      showToast(`${id}: μέτρηση ΔΕΗ αποθηκεύτηκε`, 4500);
+      setTimeout(() => requestUpdate(id, false), 250);
+      return;
+    }
+
+    if (data.cmd === "utility_reading_delete") {
+      if (adminTargetId === id) setAdminStatus("Η μέτρηση ΔΕΗ διαγράφηκε.", "ok");
+      showToast(`${id}: η μέτρηση ΔΕΗ διαγράφηκε`);
+      setTimeout(() => requestUpdate(id, false), 250);
+      if (ui.utilityHistoryDialog.open) {
+        setTimeout(() => {
+          csvBuffers.delete(id);
+          sendAdmin("utility_readings_list", "Ανανέωση ιστορικού ΔΕΗ…");
+        }, 400);
+      }
+      return;
+    }
+
+    if (data.cmd === "tariff_mode_set") {
+      if (adminTargetId === id) {
+        setAdminStatus(
+          `Τύπος μετρητή: ${data.mode === "dual" ? "Ζ1 / Ζ2" : "Ζ"}.`,
+          "ok"
+        );
+        resetUtilityEditor();
+      }
+      setTimeout(() => requestUpdate(id, false), 250);
+      return;
+    }
+
+    if (data.cmd === "utility_readings_list") {
+      return;
+    }
+
+    const msg = `OK: ${data.cmd || "admin"}`;
+    if (adminTargetId === id) setAdminStatus(msg, "ok");
+    showToast(`${id}: ${msg}`);
+  }
+
+  function parseUtilityHistoryRows(rows) {
+    return rows
+      .filter((row) => !row.startsWith("ID,"))
+      .map((row) => {
+        const f = row.split(",");
+        if (f.length < 7) return null;
+        return {
+          id: Number(f[0]),
+          date: f[1],
+          mode: f[2],
+          z: Number(f[3]),
+          z1: Number(f[4]),
+          z2: Number(f[5]),
+          timeToken: f[6] || "window"
+        };
+      })
+      .filter((row) =>
+        row &&
+        Number.isFinite(row.id) &&
+        /^\d{4}-\d{2}-\d{2}$/.test(row.date)
+      )
+      .sort((a, b) => a.date.localeCompare(b.date) || a.id - b.id);
+  }
+
+  function utilityActionButtons(row, currentMode) {
+    const canEdit = row.mode === currentMode;
+    return `
+      <div class="history-actions">
+        <button class="secondary-btn history-btn" type="button"
+          data-utility-action="edit" data-utility-id="${row.id}"
+          ${canEdit ? "" : "disabled"}>ΔΙΟΡΘΩΣΗ</button>
+        <button class="danger-outline-btn history-btn" type="button"
+          data-utility-action="delete" data-utility-id="${row.id}">ΔΙΑΓΡΑΦΗ</button>
+      </div>`;
+  }
+
+  function renderUtilityHistory(id) {
+    const device = devices.get(id);
+    if (!device) return;
+
+    const currentMode =
+      device.state.dual_zone === true || device.state.tariff_mode === "dual"
+        ? "dual"
+        : "mono";
+
+    const monoRows = utilityHistoryRows.filter((row) => row.mode === "mono");
+    const dualRows = utilityHistoryRows.filter((row) => row.mode === "dual");
+
+    const sections = [];
+
+    if (monoRows.length) {
+      let previous = null;
+      const body = monoRows.map((row) => {
+        const diff = previous ? row.z - previous.z : null;
+        previous = row;
+        return `
+          <tr>
+            <td>${escapeHtml(row.date)}</td>
+            <td><b>${diff === null ? "—" : formatNumber(diff, 2) + " kWh"}</b></td>
+            <td>${formatNumber(row.z, 2)} kWh</td>
+            <td>${utilityActionButtons(row, currentMode)}</td>
+          </tr>`;
+      }).join("");
+
+      sections.push(`
+        <h3>Μετρήσεις Ζ</h3>
+        <div class="history-table-wrap">
+          <table class="utility-history-table">
+            <thead><tr><th>Ημερομηνία</th><th>Διαφορά</th><th>Ζ</th><th></th></tr></thead>
+            <tbody>${body}</tbody>
+          </table>
+        </div>`);
+    }
+
+    if (dualRows.length) {
+      let previous = null;
+      const body = dualRows.map((row) => {
+        const dz1 = previous ? row.z1 - previous.z1 : null;
+        const dz2 = previous ? row.z2 - previous.z2 : null;
+        const total = previous ? dz1 + dz2 : null;
+        previous = row;
+
+        return `
+          <tr>
+            <td>${escapeHtml(row.date)}</td>
+            <td><b>${dz1 === null ? "—" : formatNumber(dz1, 2)}</b></td>
+            <td>${formatNumber(row.z1, 2)}</td>
+            <td><b>${dz2 === null ? "—" : formatNumber(dz2, 2)}</b></td>
+            <td>${formatNumber(row.z2, 2)}</td>
+            <td><b>${total === null ? "—" : formatNumber(total, 2)}</b></td>
+            <td>${utilityActionButtons(row, currentMode)}</td>
+          </tr>`;
+      }).join("");
+
+      sections.push(`
+        <h3>Μετρήσεις Ζ1 / Ζ2</h3>
+        <div class="history-table-wrap">
+          <table class="utility-history-table">
+            <thead>
+              <tr><th>Ημερομηνία</th><th>Δ Ζ1</th><th>Ζ1</th><th>Δ Ζ2</th><th>Ζ2</th><th>Σύνολο Δ</th><th></th></tr>
+            </thead>
+            <tbody>${body}</tbody>
+          </table>
+        </div>`);
+    }
+
+    ui.utilityHistoryTitle.textContent = `Μετρήσεις ΔΕΗ · ${id}`;
+    ui.utilityHistoryContent.innerHTML = sections.length
+      ? sections.join("")
+      : '<p class="admin-help">Δεν έχει καταχωρηθεί ακόμη μέτρηση ΔΕΗ.</p>';
+
+    if (!ui.utilityHistoryDialog.open) ui.utilityHistoryDialog.showModal();
+  }
+
+  function startUtilityEdit(row) {
+    if (!row || !adminTargetId) return;
+
+    const device = devices.get(adminTargetId);
+    if (!device) return;
+
+    const currentMode =
+      device.state.dual_zone === true || device.state.tariff_mode === "dual"
+        ? "dual"
+        : "mono";
+
+    if (row.mode !== currentMode) {
+      showToast("Για διόρθωση, ο τύπος Ζ / Ζ1-Ζ2 πρέπει να είναι ίδιος με την εγγραφή.");
+      return;
+    }
+
+    editingUtilityId = row.id;
+    ui.utilityReadingTitle.textContent = "Διόρθωση μέτρησης ΔΕΗ";
+    ui.utilityEditInfo.textContent = `Διόρθωση εγγραφής #${row.id}`;
+    ui.utilityEditInfo.classList.remove("hidden");
+    ui.cancelUtilityEditBtn.classList.remove("hidden");
+    ui.saveUtilityReadingBtn.textContent = "ΑΠΟΘΗΚΕΥΣΗ ΔΙΟΡΘΩΣΗΣ";
+
+    ui.utilityDateInput.value = row.date;
+    ui.utilityTimeInput.value = row.timeToken === "window" ? "" : row.timeToken;
+
+    if (row.mode === "dual") {
+      ui.utilityZ1Input.value = row.z1.toFixed(2);
+      ui.utilityZ2Input.value = row.z2.toFixed(2);
+    } else {
+      ui.utilityZInput.value = row.z.toFixed(2);
+    }
+
+    if (ui.utilityHistoryDialog.open) ui.utilityHistoryDialog.close();
   }
 
   function handleCsv(id, text) {
-    if (text.startsWith("BEGIN|")) {
-      csvBuffers.set(id, []);
-      if (adminTargetId === id) setAdminStatus("Λήψη Daily CSV…");
+    if (text.startsWith("BEGIN|UTILITY|")) {
+      csvBuffers.set(id, { type: "utility", rows: [] });
+      if (adminTargetId === id) setAdminStatus("Λήψη ιστορικού μετρήσεων ΔΕΗ…");
       return;
     }
 
     if (text.startsWith("ROW|")) {
-      const rows = csvBuffers.get(id);
-      if (!rows) return;
+      const buffer = csvBuffers.get(id);
+      if (!buffer) return;
       const separator = text.indexOf("|", 4);
-      if (separator >= 0) rows.push(text.slice(separator + 1));
+      if (separator >= 0) buffer.rows.push(text.slice(separator + 1));
       return;
     }
 
     if (text === "END") {
-      const rows = csvBuffers.get(id) || [];
+      const buffer = csvBuffers.get(id);
+      if (!buffer) return;
+
       csvBuffers.delete(id);
       adminBusy.delete(id);
       updateAdminButtons();
-      if (!rows.length) {
-        if (adminTargetId === id) setAdminStatus("Το CSV δεν περιείχε δεδομένα.", "error");
-        return;
+
+      if (buffer.type === "utility") {
+        utilityHistoryRows = parseUtilityHistoryRows(buffer.rows);
+        if (adminTargetId === id) setAdminStatus("Το ιστορικό ΔΕΗ φορτώθηκε.", "ok");
+        renderUtilityHistory(id);
       }
-      const blob = new Blob([`\uFEFF${rows.join("\r\n")}\r\n`], { type: "text/csv;charset=utf-8" });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `${id}_daily_stats_${new Date().toISOString().slice(0, 10)}.csv`;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      setTimeout(() => URL.revokeObjectURL(url), 1000);
-      if (adminTargetId === id) setAdminStatus("Το Daily CSV δημιουργήθηκε.", "ok");
-      showToast(`${id}: το CSV κατέβηκε`);
     }
   }
 
