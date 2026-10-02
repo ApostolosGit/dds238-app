@@ -569,10 +569,18 @@
     autoRefreshTimer = setInterval(() => requestAll(false), AUTO_REFRESH_MS);
   }
 
+  function localDateInputValue(date = new Date()) {
+    const y = date.getFullYear();
+    const m = String(date.getMonth() + 1).padStart(2, "0");
+    const d = String(date.getDate()).padStart(2, "0");
+    return `${y}-${m}-${d}`;
+  }
+
   function refreshDualZoneSettings(device) {
     const s = device.state || {};
-    const supported = Object.prototype.hasOwnProperty.call(s, "dual_zone") ||
-                      Object.prototype.hasOwnProperty.call(s, "tariff_mode");
+    const supported =
+      firmwareAtLeast(s.firmware, 3, 0) &&
+      Object.prototype.hasOwnProperty.call(s, "has_utility");
 
     const dual = supported && (s.dual_zone === true || s.tariff_mode === "dual");
 
@@ -580,20 +588,16 @@
     ui.dualZoneToggle.disabled = !supported;
     ui.saveDualZoneBtn.disabled = !supported;
     ui.dualZoneToggle.checked = dual;
+    ui.dualZoneDetails.classList.toggle("hidden", !dual);
 
-    const z1Value = s.z1_now ?? s.z1 ?? s.z1_ref;
-    const z2Value = s.z2_now ?? s.z2 ?? s.z2_ref;
-    ui.z1Input.value = Number.isFinite(Number(z1Value)) ? Number(z1Value).toFixed(2) : "";
-    ui.z2Input.value = Number.isFinite(Number(z2Value)) ? Number(z2Value).toFixed(2) : "";
+    ui.monoReadingFields.classList.toggle("hidden", dual);
+    ui.dualReadingFields.classList.toggle("hidden", !dual);
 
-    const zValue = s.z_now ?? s.deh_now ?? s.z_ref ?? s.deh_reference;
-    if (!dual && Number.isFinite(Number(zValue))) {
-      ui.dehAdminInput.value = Number(zValue).toFixed(2);
+    if (!ui.utilityDateInput.value) {
+      ui.utilityDateInput.value = localDateInputValue();
     }
 
-    ui.dualZoneDetails.classList.toggle("hidden", !dual);
-    if (ui.monoZoneSettings) ui.monoZoneSettings.classList.toggle("hidden", dual);
-    ui.saveDualZoneBtn.textContent = dual ? "ΑΠΟΘΗΚΕΥΣΗ Ζ1 / Ζ2" : "ΑΠΟΘΗΚΕΥΣΗ ΡΥΘΜΙΣΗΣ";
+    ui.saveDualZoneBtn.textContent = "ΑΠΟΘΗΚΕΥΣΗ ΤΥΠΟΥ ΜΕΤΡΗΤΗ";
   }
 
   function firmwareAtLeast(value, requiredMajor, requiredMinor) {
@@ -991,18 +995,43 @@
     }
   }
 
+  function resetUtilityEditor() {
+    editingUtilityId = null;
+    ui.utilityReadingTitle.textContent = "Νέα επίσημη μέτρηση";
+    ui.utilityEditInfo.textContent = "";
+    ui.utilityEditInfo.classList.add("hidden");
+    ui.cancelUtilityEditBtn.classList.add("hidden");
+    ui.saveUtilityReadingBtn.textContent = "ΚΑΤΑΧΩΡΗΣΗ";
+    ui.utilityDateInput.value = localDateInputValue();
+    ui.utilityTimeInput.value = "";
+    ui.utilityZInput.value = "";
+    ui.utilityZ1Input.value = "";
+    ui.utilityZ2Input.value = "";
+  }
+
   function openAdmin(id) {
     const device = devices.get(id);
     if (!device) return;
+
     adminTargetId = id;
+    resetUtilityEditor();
+
     ui.adminEyebrow.textContent = `${meterName(device)} SETTINGS`;
     ui.adminTitle.textContent = `Ρυθμίσεις · ${id}`;
     refreshDualZoneSettings(device);
+
     const fw = String((device.state || {}).firmware || "?");
     ui.otaTargetInfo.textContent = firmwareAtLeast(fw, 2, 29)
       ? `Τρέχον firmware: ${fw}. Έτοιμο για remote OTA.`
-      : `Τρέχον firmware: ${fw}. Το remote OTA προς credential-free firmware απαιτεί 2.29+.`;
-    setAdminStatus("Έτοιμο.", "ok");
+      : `Τρέχον firmware: ${fw}. Το remote OTA απαιτεί 2.29+.`;
+
+    setAdminStatus(
+      firmwareAtLeast(fw, 3, 0)
+        ? "Έτοιμο."
+        : "Οι νέες μετρήσεις ΔΕΗ απαιτούν firmware v3.00+.",
+      firmwareAtLeast(fw, 3, 0) ? "ok" : "error"
+    );
+
     updateAdminButtons();
     ui.adminDialog.showModal();
   }
@@ -1016,34 +1045,83 @@
   function updateAdminButtons() {
     const busy = adminTargetId && adminBusy.has(adminTargetId);
     const connected = Boolean(client && client.connected);
-    [ui.storeDehBtn, ui.resetStoreDehBtn, ui.exportDailyBtn, ui.clearDailyBtn].forEach((b) => {
-      b.disabled = !adminTargetId || busy || !connected;
+    const device = adminTargetId ? devices.get(adminTargetId) : null;
+    const state = device ? (device.state || {}) : {};
+    const supportsV3 = Boolean(device && firmwareAtLeast(state.firmware, 3, 0));
+
+    [
+      ui.saveUtilityReadingBtn,
+      ui.utilityHistoryBtn,
+      ui.saveDualZoneBtn
+    ].forEach((button) => {
+      if (button) button.disabled =
+        !adminTargetId || busy || !connected || !supportsV3;
     });
+
+    [
+      ui.utilityDateInput,
+      ui.utilityTimeInput,
+      ui.utilityZInput,
+      ui.utilityZ1Input,
+      ui.utilityZ2Input,
+      ui.dualZoneToggle
+    ].forEach((control) => {
+      if (control) control.disabled =
+        !adminTargetId || busy || !connected || !supportsV3;
+    });
+
     if (ui.otaUpdateBtn) {
-      const deviceForOta = adminTargetId ? devices.get(adminTargetId) : null;
-      const fwForOta = deviceForOta ? String((deviceForOta.state || {}).firmware || "") : "";
+      const fwForOta = String(state.firmware || "");
       ui.otaUpdateBtn.disabled =
         !adminTargetId || busy || !connected || otaManifestLoading ||
         !firmwareAtLeast(fwForOta, 2, 29);
     }
-    ui.dehAdminInput.disabled = !adminTargetId || busy || !connected;
-
-    const device = adminTargetId ? devices.get(adminTargetId) : null;
-    const supportsDual = Boolean(device && Object.prototype.hasOwnProperty.call(device.state || {}, "dual_zone"));
-    ui.dualZoneToggle.disabled = !supportsDual || busy || !connected;
-    ui.saveDualZoneBtn.disabled = !supportsDual || busy || !connected;
-    ui.z1Input.disabled = !supportsDual || busy || !connected;
-    ui.z2Input.disabled = !supportsDual || busy || !connected;
   }
 
-  function adminDehValue() {
-    const raw = ui.dehAdminInput.value.trim();
-    const value = Number(raw);
-    if (!raw || !Number.isFinite(value) || value <= 0 || value >= 999999) {
-      setAdminStatus("Γράψε έγκυρη νέα τιμή Ζ.", "error");
+  function readUtilityForm() {
+    if (!adminTargetId) return null;
+
+    const device = devices.get(adminTargetId);
+    if (!device) return null;
+
+    const dual =
+      device.state.dual_zone === true ||
+      device.state.tariff_mode === "dual";
+
+    const date = ui.utilityDateInput.value.trim();
+    const time = ui.utilityTimeInput.value.trim();
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+      setAdminStatus("Επίλεξε έγκυρη ημερομηνία μέτρησης.", "error");
       return null;
     }
-    return raw;
+
+    const timeToken = time || "window";
+
+    if (dual) {
+      const z1 = Number(ui.utilityZ1Input.value);
+      const z2 = Number(ui.utilityZ2Input.value);
+      if (!Number.isFinite(z1) || !Number.isFinite(z2) ||
+          z1 <= 0 || z2 <= 0 || z1 >= 999999 || z2 >= 999999) {
+        setAdminStatus("Γράψε έγκυρες ενδείξεις Ζ1 και Ζ2.", "error");
+        return null;
+      }
+
+      return {
+        dual: true,
+        commandTail: `dual|${date}|${timeToken}|${z1.toFixed(2)}|${z2.toFixed(2)}`
+      };
+    }
+
+    const z = Number(ui.utilityZInput.value);
+    if (!Number.isFinite(z) || z <= 0 || z >= 999999) {
+      setAdminStatus("Γράψε έγκυρη ένδειξη Ζ.", "error");
+      return null;
+    }
+
+    return {
+      dual: false,
+      commandTail: `mono|${date}|${timeToken}|${z.toFixed(2)}`
+    };
   }
 
   function sendAdmin(command, pendingMessage) {
