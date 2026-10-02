@@ -15,7 +15,7 @@
     path: "/mqtt"
   };
 
-  const APP_VERSION = "1.10";
+  const APP_VERSION = "1.11";
   const AUTO_REFRESH_MS = 60000;
   const OTA_PIN = "12134";
   const OTA_MANIFEST_URL = "https://raw.githubusercontent.com/ApostolosGit/ESP8266-OTA/main/manifest.txt";
@@ -578,6 +578,24 @@
     return major > requiredMajor || (major === requiredMajor && minor >= requiredMinor);
   }
 
+  function compareFirmwareVersions(a, b) {
+    const parse = (value) => {
+      const match = String(value || "").trim().match(/^(\d+)\.(\d+)(?:\.(\d+))?/);
+      if (!match) return null;
+      return [Number(match[1]), Number(match[2]), Number(match[3] || 0)];
+    };
+
+    const av = parse(a);
+    const bv = parse(b);
+    if (!av || !bv) return 0;
+
+    for (let i = 0; i < 3; i += 1) {
+      if (av[i] > bv[i]) return 1;
+      if (av[i] < bv[i]) return -1;
+    }
+    return 0;
+  }
+
   function parseOtaManifest(text) {
     const data = {};
     String(text || "").split(/\r?\n/).forEach((line) => {
@@ -703,10 +721,16 @@
 
       const currentFw = String((device.state || {}).firmware || "?");
       const oledText = manifest.oled ? ` · ${manifest.oled}` : "";
+      const isNewer = compareFirmwareVersions(manifest.version, currentFw) > 0;
+      const newBadge = isNewer ? " · NEW!" : "";
+
+      ui.otaTargetInfo.textContent =
+        `ESP8266: ${currentFw} · Available OTA: ${manifest.version}${newBadge}`;
+
       const confirmed = window.confirm(
         `OTA αναβάθμιση ${id}\n\n` +
-        `Τρέχουσα: ${currentFw}\n` +
-        `Νέα: ${manifest.version}${oledText}\n\n` +
+        `Τρέχουσα έκδοση ESP8266: ${currentFw}\n` +
+        `Available OTA: ${manifest.version}${oledText}${newBadge}\n\n` +
         "Ο ESP θα αποσυνδεθεί προσωρινά από MQTT και θα επανεκκινήσει. Συνέχεια;"
       );
 
@@ -715,10 +739,13 @@
         return;
       }
 
-      // v1.10: το PIN ζητείται ΜΕΤΑ την τελική επιβεβαίωση.
+      // v1.11: πρώτα εμφανίζονται current/available version και NEW!,
+      // μετά η τελική επιβεβαίωση και τελευταίο βήμα το PIN.
       // Καμία MQTT OTA εντολή δεν αποστέλλεται πριν επαληθευτεί το PIN.
       openOtaPinDialog(id, manifest);
-      setAdminStatus("Αναμονή PIN για έναρξη OTA.");
+      setAdminStatus(
+        `ESP8266 ${currentFw} → OTA ${manifest.version}${newBadge} · αναμονή PIN.`
+      );
     } catch (err) {
       const message = err && err.message ? err.message : String(err);
       setAdminStatus(`OTA: ${message}`, "error");
