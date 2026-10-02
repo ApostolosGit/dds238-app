@@ -16,6 +16,9 @@
   };
 
   const AUTO_REFRESH_MS = 60000;
+  const OTA_PIN = "12134";
+  const OTA_MANIFEST_URL = "https://raw.githubusercontent.com/ApostolosGit/ESP8266-OTA/main/manifest.txt";
+  const OTA_RAW_BASE_URL = "https://raw.githubusercontent.com/ApostolosGit/ESP8266-OTA/main/";
   const devices = new Map();
   const csvBuffers = new Map();
   const adminBusy = new Set();
@@ -25,6 +28,8 @@
   let toastTimeout = null;
   let deferredInstallPrompt = null;
   let adminTargetId = null;
+  let otaTargetId = null;
+  let otaManifestLoading = false;
 
   const $ = (id) => document.getElementById(id);
 
@@ -60,6 +65,15 @@
     exportDailyBtn: $("exportDailyBtn"),
     clearDailyBtn: $("clearDailyBtn"),
     adminStatus: $("adminStatus"),
+    otaTargetInfo: $("otaTargetInfo"),
+    otaUpdateBtn: $("otaUpdateBtn"),
+    otaPinDialog: $("otaPinDialog"),
+    otaPinForm: $("otaPinForm"),
+    otaPinInput: $("otaPinInput"),
+    otaPinTarget: $("otaPinTarget"),
+    otaPinError: $("otaPinError"),
+    closeOtaPinBtn: $("closeOtaPinBtn"),
+    cancelOtaPinBtn: $("cancelOtaPinBtn"),
     toast: $("toast")
   };
 
@@ -554,6 +568,131 @@
     ui.saveDualZoneBtn.textContent = dual ? "ΑΠΟΘΗΚΕΥΣΗ Ζ1 / Ζ2" : "ΑΠΟΘΗΚΕΥΣΗ ΡΥΘΜΙΣΗΣ";
   }
 
+  function firmwareAtLeast(value, requiredMajor, requiredMinor) {
+    const match = String(value || "").trim().match(/^(\d+)\.(\d+)/);
+    if (!match) return false;
+    const major = Number(match[1]);
+    const minor = Number(match[2]);
+    return major > requiredMajor || (major === requiredMajor && minor >= requiredMinor);
+  }
+
+  function parseOtaManifest(text) {
+    const data = {};
+    String(text || "").split(/\r?\n/).forEach((line) => {
+      const pos = line.indexOf("=");
+      if (pos <= 0) return;
+      const key = line.slice(0, pos).trim();
+      const value = line.slice(pos + 1).trim();
+      if (key) data[key] = value;
+    });
+
+    const size = Number(data.size);
+    if (!data.version ||
+        !/^[A-Za-z0-9._-]+\.bin$/.test(data.file || "") ||
+        !Number.isInteger(size) || size <= 0 ||
+        !/^[0-9a-f]{32}$/i.test(data.md5 || "")) {
+      throw new Error("Μη έγκυρο OTA manifest.");
+    }
+
+    return {
+      version: data.version,
+      file: data.file,
+      size,
+      md5: data.md5.toLowerCase(),
+      meter: String(data.meter || "").toUpperCase(),
+      oled: String(data.oled || "")
+    };
+  }
+
+  function otaManifestMatchesDevice(manifest, device) {
+    const type = meterType(device);
+    if (manifest.meter.includes("JSY") && type !== "JSY") return false;
+    if (manifest.meter.includes("DDS") && type !== "DDS") return false;
+    return true;
+  }
+
+  async function loadOtaManifest() {
+    const response = await fetch(OTA_MANIFEST_URL, {
+      cache: "no-store",
+      headers: { "Accept": "text/plain" }
+    });
+    if (!response.ok) {
+      throw new Error(`OTA manifest HTTP ${response.status}`);
+    }
+    return parseOtaManifest(await response.text());
+  }
+
+  function openOtaPinDialog() {
+    if (!adminTargetId) return;
+    const device = devices.get(adminTargetId);
+    if (!device) return;
+
+    const fw = String((device.state || {}).firmware || "");
+    if (!firmwareAtLeast(fw, 2, 28)) {
+      setAdminStatus("Το remote OTA προς v2.29+ απαιτεί πρώτα firmware 2.28.", "error");
+      showToast(`${adminTargetId}: απαιτεί firmware 2.28+`);
+      return;
+    }
+
+    otaTargetId = adminTargetId;
+    ui.otaPinInput.value = "";
+    ui.otaPinError.textContent = "";
+    ui.otaPinError.classList.add("hidden");
+    ui.otaPinTarget.textContent = `Συσκευή: ${otaTargetId} · firmware ${fw}`;
+    ui.otaPinDialog.showModal();
+    setTimeout(() => ui.otaPinInput.focus(), 50);
+  }
+
+  async function startRemoteOta(id) {
+    const device = devices.get(id);
+    if (!device) {
+      showToast("Η συσκευή δεν είναι πλέον διαθέσιμη.");
+      return;
+    }
+    if (!client || !client.connected) {
+      showToast("Δεν υπάρχει σύνδεση με HiveMQ.");
+      return;
+    }
+
+    otaManifestLoading = true;
+    updateAdminButtons();
+    setAdminStatus("Έλεγχος διαθέσιμου OTA firmware…");
+
+    try {
+      const manifest = await loadOtaManifest();
+
+      if (!otaManifestMatchesDevice(manifest, device)) {
+        throw new Error(`Το διαθέσιμο firmware ${manifest.meter || "?"} δεν αντιστοιχεί στη συσκευή.`);
+      }
+
+      const currentFw = String((device.state || {}).firmware || "?");
+      const oledText = manifest.oled ? ` · ${manifest.oled}` : "";
+      const confirmed = window.confirm(
+        `OTA αναβάθμιση ${id}\n\n` +
+        `Τρέχουσα: ${currentFw}\n` +
+        `Νέα: ${manifest.version}${oledText}\n\n` +
+        "Ο ESP θα αποσυνδεθεί προσωρινά από MQTT και θα επανεκκινήσει. Συνέχεια;"
+      );
+      if (!confirmed) {
+        setAdminStatus("Το OTA ακυρώθηκε.");
+        return;
+      }
+
+      const firmwareUrl = OTA_RAW_BASE_URL + encodeURIComponent(manifest.file);
+      sendAdmin(
+        `ota_https|${manifest.size}|${manifest.md5}|${firmwareUrl}`,
+        `Έναρξη OTA προς firmware ${manifest.version}…`
+      );
+    } catch (err) {
+      const message = err && err.message ? err.message : String(err);
+      setAdminStatus(`OTA: ${message}`, "error");
+      showToast(`${id}: ${message}`, 5000);
+    } finally {
+      otaManifestLoading = false;
+      updateAdminButtons();
+    }
+  }
+
   function openAdmin(id) {
     const device = devices.get(id);
     if (!device) return;
@@ -561,6 +700,10 @@
     ui.adminEyebrow.textContent = `${meterName(device)} SETTINGS`;
     ui.adminTitle.textContent = `Ρυθμίσεις · ${id}`;
     refreshDualZoneSettings(device);
+    const fw = String((device.state || {}).firmware || "?");
+    ui.otaTargetInfo.textContent = firmwareAtLeast(fw, 2, 28)
+      ? `Τρέχον firmware: ${fw}. Έτοιμο για remote OTA.`
+      : `Τρέχον firmware: ${fw}. Το remote OTA προς credential-free firmware απαιτεί 2.28+.`;
     setAdminStatus("Έτοιμο.", "ok");
     updateAdminButtons();
     ui.adminDialog.showModal();
@@ -578,6 +721,13 @@
     [ui.storeDehBtn, ui.resetStoreDehBtn, ui.exportDailyBtn, ui.clearDailyBtn].forEach((b) => {
       b.disabled = !adminTargetId || busy || !connected;
     });
+    if (ui.otaUpdateBtn) {
+      const deviceForOta = adminTargetId ? devices.get(adminTargetId) : null;
+      const fwForOta = deviceForOta ? String((deviceForOta.state || {}).firmware || "") : "";
+      ui.otaUpdateBtn.disabled =
+        !adminTargetId || busy || !connected || otaManifestLoading ||
+        !firmwareAtLeast(fwForOta, 2, 28);
+    }
     ui.dehAdminInput.disabled = !adminTargetId || busy || !connected;
 
     const device = adminTargetId ? devices.get(adminTargetId) : null;
@@ -632,12 +782,15 @@
     };
 
     const ok = Boolean(data.ok);
-    const msg = ok
-      ? `OK: ${data.cmd || "admin"}`
-      : (errorMessages[data.error] || `Σφάλμα: ${data.error || "άγνωστο"}`);
+    const otaStarting = ok && data.cmd === "ota_https" && data.state === "starting";
+    const msg = otaStarting
+      ? "OTA ξεκίνησε. Ο ESP κατεβάζει και επαληθεύει το νέο firmware…"
+      : (ok
+          ? `OK: ${data.cmd || "admin"}`
+          : (errorMessages[data.error] || `Σφάλμα: ${data.error || "άγνωστο"}`));
 
     if (adminTargetId === id) setAdminStatus(msg, ok ? "ok" : "error");
-    showToast(`${id}: ${msg}`);
+    showToast(`${id}: ${msg}`, otaStarting ? 6500 : 2600);
 
     if (ok && (data.cmd === "store_deh" ||
                data.cmd === "reset_store_deh" ||
@@ -843,6 +996,27 @@
   });
 
   ui.closeAdminBtn.addEventListener("click", () => ui.adminDialog.close());
+
+  ui.otaUpdateBtn.addEventListener("click", openOtaPinDialog);
+  ui.closeOtaPinBtn.addEventListener("click", () => ui.otaPinDialog.close());
+  ui.cancelOtaPinBtn.addEventListener("click", () => ui.otaPinDialog.close());
+
+  ui.otaPinForm.addEventListener("submit", (event) => {
+    event.preventDefault();
+    const entered = ui.otaPinInput.value.trim();
+
+    if (entered !== OTA_PIN) {
+      ui.otaPinError.textContent = "Λάθος PIN.";
+      ui.otaPinError.classList.remove("hidden");
+      ui.otaPinInput.select();
+      return;
+    }
+
+    const id = otaTargetId;
+    otaTargetId = null;
+    ui.otaPinDialog.close();
+    if (id) startRemoteOta(id);
+  });
 
   ui.storeDehBtn.addEventListener("click", () => {
     const value = adminDehValue();
