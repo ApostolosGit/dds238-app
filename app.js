@@ -312,11 +312,13 @@
   }
 
   function tariffRow(label, value, unit = "kWh", extra = "") {
+    const missing = value === null || value === undefined || value === "";
+    const display = missing ? "—" : formatNumber(value, 2);
     return `
       <div class="tariff-row ${extra}">
         <span class="tariff-row-label">${escapeHtml(label)}</span>
         <span class="tariff-row-colon">:</span>
-        <b class="tariff-row-value">${escapeHtml(formatNumber(value, 2))}${unit ? ` <small>${escapeHtml(unit)}</small>` : ""}</b>
+        <b class="tariff-row-value">${escapeHtml(display)}${!missing && unit ? ` <small>${escapeHtml(unit)}</small>` : ""}</b>
       </div>`;
   }
 
