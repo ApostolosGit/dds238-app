@@ -1,0 +1,28 @@
+name: Check live Pages version
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/check-live-pages.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check live site
+        shell: bash
+        run: |
+          set -euo pipefail
+          BASE="https://apostolosgit.github.io/dds238-app"
+          for f in index.html app.js sw.js; do
+            echo "===== $f ====="
+            curl -fsSL -H 'Cache-Control: no-cache' "$BASE/$f?ts=$(date +%s)" -o "/tmp/$f"
+            echo "size=$(stat -c%s "/tmp/$f")"
+            grep -nE 'Energy DDS / JSY v1\.[0-9]+|APP_VERSION|energy-dds-jsy-pwa-v1\.[0-9]+\.[0-9]+' "/tmp/$f" || true
+          done
