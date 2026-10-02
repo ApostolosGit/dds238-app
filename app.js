@@ -322,49 +322,53 @@
 
   function renderTariffEnergy(state) {
     const dual = state.dual_zone === true || state.tariff_mode === "dual";
+    const hasUtility = state.has_utility === true;
+    const estimateValid = state.estimate_valid === true;
+
+    const rowValue = (value, digits = 2) =>
+      Number.isFinite(Number(value)) ? Number(value) : null;
 
     if (dual) {
       const zone = String(state.tariff_zone || "-");
       const isZ2 = zone === "Z2";
-      const clock = state.clock_source === "internal" ? "εσωτερικό ρολόι" :
-                    state.clock_source === "ntp/internal" ? "NTP / εσωτερικό" :
-                    "χωρίς έγκυρη ώρα";
-
-      const z1Ref = state.z1_ref ?? state.z1 ?? 0;
-      const z1Now = state.z1_now ?? state.z1 ?? 0;
-      const z1Diff = state.z1_diff ?? (Number(z1Now) - Number(z1Ref));
-
-      const z2Ref = state.z2_ref ?? state.z2 ?? 0;
-      const z2Now = state.z2_now ?? state.z2 ?? 0;
-      const z2Diff = state.z2_diff ?? (Number(z2Now) - Number(z2Ref));
+      const z1Ref = hasUtility ? rowValue(state.z1_ref) : null;
+      const z2Ref = hasUtility ? rowValue(state.z2_ref) : null;
+      const z1Now = estimateValid ? rowValue(state.z1_now) : null;
+      const z2Now = estimateValid ? rowValue(state.z2_now) : null;
+      const z1Diff = estimateValid ? rowValue(state.z1_diff) : null;
+      const z2Diff = estimateValid ? rowValue(state.z2_diff) : null;
 
       return `
         <section class="tariff-dashboard">
           <div class="section-title-row">
-            <h3>Ρολόγια ΔΕΗ: Μετρητής Ζ1, Μετρητής Ζ2</h3>
+            <h3>Μετρητής ΔΕΗ Ζ1 / Ζ2</h3>
             <span class="zone-now ${isZ2 ? "cheap" : "normal"}">Τώρα ${escapeHtml(zone)}</span>
           </div>
           <div class="tariff-zone-grid">
             <article class="tariff-zone-card">
-              <h4>Ζ1 · ακριβή ζώνη</h4>
+              <h4>Ζ1</h4>
               ${tariffRow("Διαφορά", z1Diff, "kWh", diffTone(z1Diff))}
-              ${tariffRow("Now", z1Now)}
-              ${tariffRow("Reference", z1Ref)}
+              ${tariffRow("Εκτίμηση τώρα", z1Now, "kWh")}
+              ${tariffRow("Τελευταία ΔΕΗ", z1Ref, "kWh")}
             </article>
             <article class="tariff-zone-card cheap-zone-card">
-              <h4>Ζ2 · οικονομική ζώνη</h4>
+              <h4>Ζ2</h4>
               ${tariffRow("Διαφορά", z2Diff, "kWh", diffTone(z2Diff))}
-              ${tariffRow("Now", z2Now)}
-              ${tariffRow("Reference", z2Ref)}
+              ${tariffRow("Εκτίμηση τώρα", z2Now, "kWh")}
+              ${tariffRow("Τελευταία ΔΕΗ", z2Ref, "kWh")}
             </article>
           </div>
-          <div class="tariff-meta">Ρολόι: ${escapeHtml(clock)} · ${escapeHtml(state.datetime || "")}</div>
+          ${hasUtility
+            ? (!estimateValid
+                ? '<div class="tariff-meta">Η τελευταία μέτρηση ΔΕΗ αποθηκεύτηκε, αλλά δεν υπάρχει αρκετό εσωτερικό ιστορικό για εκτίμηση τώρα.</div>'
+                : "")
+            : '<div class="tariff-meta">Καταχώρησε την πρώτη επίσημη μέτρηση ΔΕΗ από τις Ρυθμίσεις.</div>'}
         </section>`;
     }
 
-    const zRef = state.z_ref ?? state.deh_reference;
-    const zNow = state.z_now ?? state.deh_now;
-    const zDiff = state.z_diff ?? state.diff;
+    const zRef = hasUtility ? rowValue(state.z_ref) : null;
+    const zNow = estimateValid ? rowValue(state.z_now) : null;
+    const zDiff = estimateValid ? rowValue(state.z_diff) : null;
 
     return `
       <section class="tariff-dashboard single-zone-dashboard">
@@ -376,10 +380,15 @@
           <article class="tariff-zone-card single-zone-card">
             <h4>Ζ</h4>
             ${tariffRow("Διαφορά", zDiff, "kWh", diffTone(zDiff))}
-            ${tariffRow("Now", zNow)}
-            ${tariffRow("Reference", zRef)}
+            ${tariffRow("Εκτίμηση τώρα", zNow, "kWh")}
+            ${tariffRow("Τελευταία ΔΕΗ", zRef, "kWh")}
           </article>
         </div>
+        ${hasUtility
+          ? (!estimateValid
+              ? '<div class="tariff-meta">Η τελευταία μέτρηση ΔΕΗ αποθηκεύτηκε, αλλά δεν υπάρχει αρκετό εσωτερικό ιστορικό για εκτίμηση τώρα.</div>'
+              : "")
+          : '<div class="tariff-meta">Καταχώρησε την πρώτη επίσημη μέτρηση ΔΕΗ από τις Ρυθμίσεις.</div>'}
       </section>`;
   }
 
@@ -389,16 +398,19 @@
     const current = Math.abs(Number(s.current) || 0);
     const dual = s.dual_zone === true || s.tariff_mode === "dual";
 
-    const zRef = s.z_ref ?? s.deh_reference;
-    const zNow = s.z_now ?? s.deh_now;
-    const zDiff = s.z_diff ?? s.diff;
+    const hasUtility = s.has_utility === true;
+    const estimateValid = s.estimate_valid === true;
+    const zRef = hasUtility ? s.z_ref : null;
+    const zNow = estimateValid ? s.z_now : null;
+    const zDiff = estimateValid ? s.z_diff : null;
 
     const singleZoneMeter = dual ? "" : `
       <div class="dds-inline-column dds-meter-column">
         <div class="embedded-tariff-title">Μετρητής ΔΕΗ Ζ</div>
         ${tariffRow("Διαφορά", zDiff, "kWh", diffTone(zDiff))}
-        ${tariffRow("Now", zNow)}
-        ${tariffRow("Reference", zRef)}
+        ${tariffRow("Εκτίμηση τώρα", zNow, "kWh")}
+        ${tariffRow("Τελευταία ΔΕΗ", zRef, "kWh")}
+        ${!hasUtility ? '<div class="tariff-meta">Καταχώρησε πρώτη μέτρηση ΔΕΗ.</div>' : ""}
       </div>`;
 
     return `
