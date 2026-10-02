@@ -960,7 +960,18 @@
 
       const currentFw = String((device.state || {}).firmware || "?");
       const oledText = manifest.oled ? ` · ${manifest.oled}` : "";
-      const isNewer = compareFirmwareVersions(manifest.version, currentFw) > 0;
+      const versionComparison = compareFirmwareVersions(manifest.version, currentFw);
+
+      if (versionComparison < 0) {
+        setAdminStatus(
+          `Το διαθέσιμο OTA v${manifest.version} είναι παλαιότερο από το τρέχον v${currentFw}. Το downgrade μπλοκαρίστηκε.`,
+          "error"
+        );
+        showToast(`${id}: OTA downgrade μπλοκαρίστηκε`, 5000);
+        return;
+      }
+
+      const isNewer = versionComparison > 0;
       const newBadge = isNewer ? " · NEW!" : "";
 
       ui.otaTargetInfo.textContent =
@@ -1682,63 +1693,106 @@
     }
   });
 
-  ui.storeDehBtn.addEventListener("click", () => {
-    const value = adminDehValue();
-    if (value !== null) sendAdmin(`zone_set|${value}`, "Αποθήκευση νέου Ζ reference…");
+  ui.saveUtilityReadingBtn.addEventListener("click", () => {
+    const form = readUtilityForm();
+    if (!form) return;
+
+    const command = editingUtilityId
+      ? `utility_reading_update|${editingUtilityId}|${form.commandTail}`
+      : `utility_reading_add|${form.commandTail}`;
+
+    sendAdmin(
+      command,
+      editingUtilityId
+        ? "Αποθήκευση διόρθωσης μέτρησης ΔΕΗ…"
+        : "Καταχώρηση μέτρησης ΔΕΗ…"
+    );
   });
 
-  ui.resetStoreDehBtn.addEventListener("click", () => {
-    const value = adminDehValue();
-    if (value === null) return;
-    if (!window.confirm("RESET + STORE θα διαγράψει ΟΛΑ τα daily stats και drift/calibration history. Συνέχεια;")) return;
-    sendAdmin(`reset_store_deh|${value}`, "RESET + STORE σε εξέλιξη…");
+  ui.cancelUtilityEditBtn.addEventListener("click", () => {
+    resetUtilityEditor();
+    const device = adminTargetId ? devices.get(adminTargetId) : null;
+    if (device) refreshDualZoneSettings(device);
+    setAdminStatus("Η διόρθωση ακυρώθηκε.", "ok");
   });
 
-  ui.exportDailyBtn.addEventListener("click", () => {
+  ui.utilityHistoryBtn.addEventListener("click", () => {
     if (!adminTargetId) return;
     csvBuffers.delete(adminTargetId);
-    sendAdmin("export_daily", "Προετοιμασία Daily CSV…");
+    sendAdmin("utility_readings_list", "Λήψη ιστορικού μετρήσεων ΔΕΗ…");
   });
 
-  ui.clearDailyBtn.addEventListener("click", () => {
-    if (!window.confirm("Να καθαριστούν μόνο τα daily statistics;")) return;
-    sendAdmin("clear_daily", "Καθαρισμός daily stats…");
+  ui.closeUtilityHistoryBtn.addEventListener("click", () => {
+    ui.utilityHistoryDialog.close();
+  });
+
+  ui.utilityHistoryContent.addEventListener("click", (event) => {
+    const button = event.target.closest("[data-utility-action]");
+    if (!button) return;
+
+    const id = Number(button.dataset.utilityId);
+    const row = utilityHistoryRows.find((item) => item.id === id);
+    if (!row) return;
+
+    if (button.dataset.utilityAction === "edit") {
+      startUtilityEdit(row);
+      return;
+    }
+
+    if (button.dataset.utilityAction === "delete") {
+      if (!window.confirm(`Να διαγραφεί η μέτρηση ΔΕΗ ${row.date};`)) return;
+      if (ui.utilityHistoryDialog.open) ui.utilityHistoryDialog.close();
+      sendAdmin(
+        `utility_reading_delete|${row.id}`,
+        "Διαγραφή μέτρησης ΔΕΗ…"
+      );
+    }
   });
 
   ui.dualZoneToggle.addEventListener("change", () => {
     const enabled = ui.dualZoneToggle.checked;
     ui.dualZoneDetails.classList.toggle("hidden", !enabled);
-    if (ui.monoZoneSettings) ui.monoZoneSettings.classList.toggle("hidden", enabled);
-    ui.saveDualZoneBtn.textContent = enabled ? "ΑΠΟΘΗΚΕΥΣΗ Ζ1 / Ζ2" : "ΑΠΟΘΗΚΕΥΣΗ ΡΥΘΜΙΣΗΣ";
+    ui.monoReadingFields.classList.toggle("hidden", enabled);
+    ui.dualReadingFields.classList.toggle("hidden", !enabled);
   });
 
   ui.saveDualZoneBtn.addEventListener("click", () => {
     if (!adminTargetId) return;
 
     const device = devices.get(adminTargetId);
-    if (!device || !Object.prototype.hasOwnProperty.call(device.state || {}, "dual_zone")) {
-      setAdminStatus("Απαιτεί firmware 1.18 ή νεότερο.", "error");
+    if (!device || !firmwareAtLeast((device.state || {}).firmware, 3, 0)) {
+      setAdminStatus("Απαιτεί firmware v3.00 ή νεότερο.", "error");
       return;
     }
 
     const enabled = ui.dualZoneToggle.checked;
-    let z1 = Number(ui.z1Input.value);
-    let z2 = Number(ui.z2Input.value);
+    const currentDual =
+      device.state.dual_zone === true ||
+      device.state.tariff_mode === "dual";
 
-    if (!enabled) {
-      z1 = Number.isFinite(z1) ? z1 : Number(device.state.z1 || 0);
-      z2 = Number.isFinite(z2) ? z2 : Number(device.state.z2 || 0);
+    if (enabled === currentDual) {
+      setAdminStatus(
+        `Ο τύπος είναι ήδη ${enabled ? "Ζ1 / Ζ2" : "Ζ"}.`,
+        "ok"
+      );
+      return;
     }
 
-    if (!Number.isFinite(z1) || !Number.isFinite(z2) ||
-        z1 < 0 || z2 < 0 || z1 >= 999999 || z2 >= 999999) {
-      setAdminStatus("Γράψε έγκυρες τιμές Ζ1 και Ζ2.", "error");
+    const warning = enabled
+      ? "Αλλαγή σε Ζ1 / Ζ2. Οι εσωτερικοί accumulators Ζ1/Ζ2 θα ξεκινήσουν από τώρα. Συνέχεια;"
+      : "Αλλαγή σε μονοζωνικό Ζ. Συνέχεια;";
+
+    if (!window.confirm(warning)) {
+      ui.dualZoneToggle.checked = currentDual;
+      ui.dualZoneDetails.classList.toggle("hidden", !currentDual);
+      ui.monoReadingFields.classList.toggle("hidden", currentDual);
+      ui.dualReadingFields.classList.toggle("hidden", !currentDual);
       return;
     }
 
     sendAdmin(
-      `dualzone_set|${enabled ? 1 : 0}|${z1.toFixed(2)}|${z2.toFixed(2)}`,
-      enabled ? "Ενεργοποίηση διζωνικού…" : "Απενεργοποίηση διζωνικού…"
+      `tariff_mode_set|${enabled ? "dual" : "mono"}`,
+      "Αποθήκευση τύπου μετρητή…"
     );
   });
 
