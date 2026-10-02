@@ -330,6 +330,7 @@ dialog {
 }
 dialog::backdrop { background: rgba(0,9,16,.78); backdrop-filter: blur(5px); }
 #settingsForm,
+#otaPinForm,
 .admin-dialog-body { padding: 22px; }
 .dialog-head {
   display: flex;
