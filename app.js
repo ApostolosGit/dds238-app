@@ -15,7 +15,7 @@
     path: "/mqtt"
   };
 
-  const APP_VERSION = "2.04";
+  const APP_VERSION = "2.05";
   const AUTO_REFRESH_MS = 60000;
   const OTA_ACK_TIMEOUT_MS = 12000;
   const OTA_POLL_MS = 5000;
@@ -152,8 +152,8 @@
       <div id="dualZoneDetails" class="hidden">
         <div class="tariff-schedule">
           <strong>Ωράριο Διζωνικού Συστήματος</strong>
-          <p><b>Ζ1:</b> όλες οι ώρες εκτός Ζ2.</p>
-          <p><b>Ζ2:</b> μειωμένη ζώνη.</p>
+          <p><b>Ζ1 / Ακριβό τιμολόγιο:</b> όλες οι ώρες εκτός Ζ2.</p>
+          <p><b>Ζ2 / Οικονομικό τιμολόγιο:</b> μειωμένη ζώνη.</p>
           <div class="schedule-grid">
             <div>
               <b>Χειμερινή περίοδος</b>
@@ -361,17 +361,17 @@
         <section class="tariff-dashboard">
           <div class="section-title-row">
             <h3>Μετρητής ΔΕΗ Ζ1 / Ζ2</h3>
-            <span class="zone-now ${isZ2 ? "cheap" : "normal"}">Τώρα ${escapeHtml(zone)}</span>
+            <span class="zone-now ${isZ2 ? "cheap" : "normal"}">Τώρα ${isZ2 ? "Ζ2 / Οικονομικό τιμολόγιο" : "Ζ1 / Ακριβό τιμολόγιο"}</span>
           </div>
           <div class="tariff-zone-grid">
             <article class="tariff-zone-card">
-              <h4>Ζ1</h4>
+              <h4>Ζ1 / Ακριβό τιμολόγιο</h4>
               ${tariffRow("Διαφορά", z1Diff, "kWh", diffTone(z1Diff))}
               ${tariffRow("Εκτίμηση τώρα", z1Now, "kWh")}
               ${tariffRow("Τελευταία ΔΕΗ", z1Ref, "kWh")}
             </article>
             <article class="tariff-zone-card cheap-zone-card">
-              <h4>Ζ2</h4>
+              <h4>Ζ2 / Οικονομικό τιμολόγιο</h4>
               ${tariffRow("Διαφορά", z2Diff, "kWh", diffTone(z2Diff))}
               ${tariffRow("Εκτίμηση τώρα", z2Now, "kWh")}
               ${tariffRow("Τελευταία ΔΕΗ", z2Ref, "kWh")}
@@ -494,7 +494,6 @@
       : "--";
 
     const firmware = state.firmware ? `v${state.firmware}` : "--";
-    const buildDate = state.build_date || "--";
     const rssi = Number.isFinite(Number(state.rssi)) ? `${formatNumber(state.rssi, 0)} dBm` : "--";
 
     let totalPowerLine = "";
@@ -504,7 +503,7 @@
         <div class="device-total-power ${powerTone(totalPower)}">
           <span>Συνολική ισχύς</span>
           <span class="device-total-power-colon">:</span>
-          <b class="device-total-power-value">${escapeHtml(formatNumber(totalPower / 1000, 2))} <small>kW</small></b>
+          <b class="device-total-power-value">${escapeHtml(formatNumber(totalPower, 0))}W</b>
         </div>`;
     }
 
@@ -519,7 +518,7 @@
                 <h2>${escapeHtml(deviceTitle(device))}</h2>
                 ${totalPowerLine}
               </div>
-              <span class="firmware-meta">Firmware ${escapeHtml(firmware)} · ${escapeHtml(buildDate)}</span>
+              <span class="firmware-meta"><span>Firmware ${escapeHtml(firmware)}</span><span class="firmware-meta-sep">·</span><span>MQTT.app. v${escapeHtml(APP_VERSION)}</span></span>
             </div>
           </div>
           <div class="device-head-right">
@@ -695,6 +694,44 @@
       throw new Error(`OTA manifest HTTP ${response.status}`);
     }
     return parseOtaManifest(await response.text());
+  }
+
+  function renderOtaAvailability(device, manifest = null, checking = false) {
+    if (!device || !ui.otaTargetInfo) return;
+    const currentFw = String((device.state || {}).firmware || "?");
+    const parts = [
+      `<span class="ota-current-line">Τρέχον firmware: <b>${escapeHtml(currentFw)}</b></span>`
+    ];
+
+    if (manifest &&
+        otaManifestMatchesDevice(manifest, device) &&
+        compareFirmwareVersions(manifest.version, currentFw) > 0) {
+      parts.push(
+        `<span class="ota-available-line">Available NEW updates: <b>${escapeHtml(manifest.version)}</b></span>`
+      );
+    } else if (checking) {
+      parts.push('<span class="ota-checking-line">Έλεγχος διαθέσιμης έκδοσης…</span>');
+    }
+
+    if (!firmwareAtLeast(currentFw, 2, 29)) {
+      parts.push('<span class="ota-checking-line">Το remote OTA απαιτεί firmware 2.29+.</span>');
+    }
+    ui.otaTargetInfo.innerHTML = parts.join("");
+  }
+
+  async function refreshOtaAvailability(id) {
+    const device = devices.get(id);
+    if (!device) return;
+    renderOtaAvailability(device, null, true);
+
+    try {
+      const manifest = await loadOtaManifest();
+      if (adminTargetId !== id) return;
+      renderOtaAvailability(device, manifest, false);
+    } catch (_) {
+      if (adminTargetId !== id) return;
+      renderOtaAvailability(device, null, false);
+    }
   }
 
   function clearOtaAckTimer() {
@@ -999,8 +1036,7 @@
       const isNewer = versionComparison > 0;
       const newBadge = isNewer ? " · NEW!" : "";
 
-      ui.otaTargetInfo.textContent =
-        `ESP8266: ${currentFw} · Available OTA: ${manifest.version}${newBadge}`;
+      renderOtaAvailability(device, manifest, false);
 
       const confirmed = window.confirm(
         `OTA αναβάθμιση ${id}\n\n` +
@@ -1190,9 +1226,7 @@
     refreshDualZoneSettings(device);
 
     const fw = String((device.state || {}).firmware || "?");
-    ui.otaTargetInfo.textContent = firmwareAtLeast(fw, 2, 29)
-      ? `Τρέχον firmware: ${fw}. Έτοιμο για remote OTA.`
-      : `Τρέχον firmware: ${fw}. Το remote OTA απαιτεί 2.29+.`;
+    renderOtaAvailability(device, null, true);
 
     const supportsEntryTypes = firmwareAtLeast(fw, 3, 4);
     setAdminStatus(
@@ -1210,6 +1244,9 @@
 
     if (firmwareAtLeast(fw, 3, 0) && client && client.connected) {
       setTimeout(() => refreshUtilityRows(id, false), 0);
+    }
+    if (client && client.connected) {
+      setTimeout(() => refreshOtaAvailability(id), 0);
     }
   }
 
@@ -2029,13 +2066,23 @@
   });
 
   ui.dualZoneToggle.addEventListener("change", () => {
-    const enabled = ui.dualZoneToggle.checked;
-    ui.dualZoneDetails.classList.toggle("hidden", !enabled);
-    ui.monoReadingFields.classList.toggle("hidden", enabled);
-    ui.dualReadingFields.classList.toggle("hidden", !enabled);
-    if (ui.utilityTariffLabel) {
-      ui.utilityTariffLabel.textContent = `Τιμολόγιο: ${enabled ? "Διζωνικό Ζ1 / Ζ2" : "Μονοζωνικό Ζ"}`;
+    if (!adminTargetId) return;
+    const device = devices.get(adminTargetId);
+    if (!device) return;
+
+    const selected = ui.dualZoneToggle.checked;
+    const currentDual =
+      device.state.dual_zone === true ||
+      device.state.tariff_mode === "dual";
+
+    if (selected === currentDual) {
+      setAdminStatus(`Παραμένει ${selected ? "Ζ1 / Ζ2" : "Ζ"}.`, "ok");
+      return;
     }
+
+    setAdminStatus(
+      `Επιλέχθηκε ${selected ? "Ζ1 / Ζ2" : "Ζ"}. Πάτησε ΑΠΟΘΗΚΕΥΣΗ ΤΥΠΟΥ ΜΕΤΡΗΤΗ για εφαρμογή.`
+    );
   });
 
   ui.saveDualZoneBtn.addEventListener("click", () => {
@@ -2060,9 +2107,10 @@
       return;
     }
 
-    const warning = enabled
-      ? "Αλλαγή σε Ζ1 / Ζ2. Οι εσωτερικοί accumulators Ζ1/Ζ2 θα ξεκινήσουν από τώρα. Συνέχεια;"
-      : "Αλλαγή σε μονοζωνικό Ζ. Συνέχεια;";
+    const currentLabel = currentDual ? "Ζ1 / Ζ2" : "Ζ";
+    const newLabel = enabled ? "Ζ1 / Ζ2" : "Ζ";
+    const warning =
+      `Επιβεβαίωση αλλαγής τιμολογίου\n\nΤρέχον: ${currentLabel}\nΝέο: ${newLabel}\n\nΝα αποθηκευτεί η αλλαγή;`;
 
     if (!window.confirm(warning)) {
       ui.dualZoneToggle.checked = currentDual;
@@ -2134,7 +2182,7 @@
   }
 
   const footerSpans = document.querySelectorAll("footer span");
-  if (footerSpans[0]) footerSpans[0].textContent = `Energy DDS / JSY v${APP_VERSION}`;
+  if (footerSpans[0]) footerSpans[0].textContent = `MQTT.app. v${APP_VERSION}`;
   if (footerSpans[1]) footerSpans[1].textContent = "Auto discovery · Z1/Z2 · refresh 60″";
 
   restoreSettings();
