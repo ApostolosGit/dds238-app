@@ -15,7 +15,7 @@
     path: "/mqtt"
   };
 
-  const APP_VERSION = "2.03";
+  const APP_VERSION = "2.04";
   const AUTO_REFRESH_MS = 60000;
   const OTA_ACK_TIMEOUT_MS = 12000;
   const OTA_POLL_MS = 5000;
@@ -177,7 +177,7 @@
       </button>
     `;
 
-    ui.utilityReadingSettings.parentNode.insertBefore(section, ui.utilityReadingSettings);
+    ui.utilityReadingSettings.insertAdjacentElement("afterend", section);
   }
 
   injectDualZoneUi();
