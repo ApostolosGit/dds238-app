@@ -15,7 +15,7 @@
     path: "/mqtt"
   };
 
-  const APP_VERSION = "2.05";
+  const APP_VERSION = "2.06";
   const AUTO_REFRESH_MS = 60000;
   const OTA_ACK_TIMEOUT_MS = 12000;
   const OTA_POLL_MS = 5000;
@@ -134,6 +134,17 @@
     section.id = "dualZoneSettings";
     section.className = "settings-section dual-zone-settings";
     section.innerHTML = `
+      <div class="meter-type-settings">
+        <p class="eyebrow">ΤΥΠΟΣ ΜΕΤΡΗΤΗ</p>
+        <h3 id="meterPhaseTypeLabel">—</h3>
+        <p id="meterPhaseTypeHelp" class="admin-help">Ο τύπος αναγνωρίζεται από το firmware της συσκευής.</p>
+        <button id="changeMeterTypeBtn" class="secondary-btn admin-btn full-btn" type="button">
+          ΑΛΛΑΓΗ ΤΥΠΟΥ ΜΕΤΡΗΤΗ · ΜΟΝΟΦΑΣΙΚΟ / ΤΡΙΦΑΣΙΚΟ
+        </button>
+      </div>
+
+      <div class="settings-divider"></div>
+
       <div class="setting-toggle-row">
         <div>
           <p class="eyebrow">ΤΙΜΟΛΟΓΙΟ</p>
@@ -173,7 +184,7 @@
       </div>
 
       <button id="saveDualZoneBtn" class="primary-btn admin-btn full-btn" type="button">
-        ΑΠΟΘΗΚΕΥΣΗ ΤΥΠΟΥ ΜΕΤΡΗΤΗ
+        ΑΠΟΘΗΚΕΥΣΗ ΤΙΜΟΛΟΓΙΟΥ
       </button>
     `;
 
@@ -182,6 +193,9 @@
 
   injectDualZoneUi();
 
+  ui.meterPhaseTypeLabel = $("meterPhaseTypeLabel");
+  ui.meterPhaseTypeHelp = $("meterPhaseTypeHelp");
+  ui.changeMeterTypeBtn = $("changeMeterTypeBtn");
   ui.dualZoneToggle = $("dualZoneToggle");
   ui.dualZoneDetails = $("dualZoneDetails");
   ui.dualZoneUnsupported = $("dualZoneUnsupported");
@@ -249,6 +263,10 @@
     const s = device.state || {};
     if (s.meter) return String(s.meter);
     return meterType(device) === "JSY" ? "JSY-MK-333" : "DDS238";
+  }
+
+  function meterPhaseType(device) {
+    return meterType(device) === "JSY" ? "Τριφασικό" : "Μονοφασικό";
   }
 
   function deviceTitle(device) {
@@ -607,7 +625,10 @@
       Object.prototype.hasOwnProperty.call(s, "has_utility");
 
     const dual = supported && (s.dual_zone === true || s.tariff_mode === "dual");
+    const phaseType = meterPhaseType(device);
 
+    ui.meterPhaseTypeLabel.textContent = `${phaseType} · ${meterName(device)}`;
+    ui.meterPhaseTypeHelp.textContent = `Τρέχων τύπος: ${phaseType}. Καθορίζεται από το firmware και το συνδεδεμένο hardware.`;
     ui.dualZoneUnsupported.classList.toggle("hidden", supported);
     ui.dualZoneToggle.disabled = !supported;
     ui.saveDualZoneBtn.disabled = !supported;
@@ -621,7 +642,7 @@
       ui.utilityDateInput.value = localDateInputValue();
     }
 
-    ui.saveDualZoneBtn.textContent = "ΑΠΟΘΗΚΕΥΣΗ ΤΥΠΟΥ ΜΕΤΡΗΤΗ";
+    ui.saveDualZoneBtn.textContent = "ΑΠΟΘΗΚΕΥΣΗ ΤΙΜΟΛΟΓΙΟΥ";
   }
 
   function firmwareAtLeast(value, requiredMajor, requiredMinor) {
@@ -696,21 +717,29 @@
     return parseOtaManifest(await response.text());
   }
 
-  function renderOtaAvailability(device, manifest = null, checking = false) {
+  function renderOtaAvailability(device, manifest = null, checking = false, checkFailed = false) {
     if (!device || !ui.otaTargetInfo) return;
     const currentFw = String((device.state || {}).firmware || "?");
     const parts = [
       `<span class="ota-current-line">Τρέχον firmware: <b>${escapeHtml(currentFw)}</b></span>`
     ];
 
-    if (manifest &&
-        otaManifestMatchesDevice(manifest, device) &&
-        compareFirmwareVersions(manifest.version, currentFw) > 0) {
+    const hasNewer = Boolean(
+      manifest &&
+      otaManifestMatchesDevice(manifest, device) &&
+      compareFirmwareVersions(manifest.version, currentFw) > 0
+    );
+
+    if (hasNewer) {
       parts.push(
-        `<span class="ota-available-line">Available NEW updates: <b>${escapeHtml(manifest.version)}</b></span>`
+        `<span class="ota-available-line">Available <span class="ota-new-blink">NEW</span> updates: <b>${escapeHtml(manifest.version)}</b></span>`
       );
     } else if (checking) {
       parts.push('<span class="ota-checking-line">Έλεγχος διαθέσιμης έκδοσης…</span>');
+    } else if (checkFailed) {
+      parts.push('<span class="ota-checking-line">Update check unavailable</span>');
+    } else {
+      parts.push('<span class="ota-none-line">No new updates</span>');
     }
 
     if (!firmwareAtLeast(currentFw, 2, 29)) {
@@ -730,7 +759,7 @@
       renderOtaAvailability(device, manifest, false);
     } catch (_) {
       if (adminTargetId !== id) return;
-      renderOtaAvailability(device, null, false);
+      renderOtaAvailability(device, null, false, true);
     }
   }
 
@@ -1269,6 +1298,9 @@
     }
     if (ui.startUtilityReadingBtn) {
       ui.startUtilityReadingBtn.disabled = !adminTargetId || busy || !connected || !supportsTypes;
+    }
+    if (ui.changeMeterTypeBtn) {
+      ui.changeMeterTypeBtn.disabled = !adminTargetId || busy;
     }
     if (ui.saveDualZoneBtn) {
       ui.saveDualZoneBtn.disabled = !adminTargetId || busy || !connected || !supportsV3;
@@ -2065,6 +2097,18 @@
     }
   });
 
+  ui.changeMeterTypeBtn.addEventListener("click", () => {
+    if (!adminTargetId) return;
+    const device = devices.get(adminTargetId);
+    if (!device) return;
+    const phaseType = meterPhaseType(device);
+    const meter = meterName(device);
+    window.alert(
+      `Τρέχων τύπος μετρητή: ${phaseType} (${meter}).\n\n` +
+      "Η πραγματική αλλαγή Μονοφασικό ↔ Τριφασικό απαιτεί το αντίστοιχο firmware και συμβατό συνδεδεμένο μετρητή. Δεν γίνεται ασφαλής αλλαγή μόνο από το app."
+    );
+  });
+
   ui.dualZoneToggle.addEventListener("change", () => {
     if (!adminTargetId) return;
     const device = devices.get(adminTargetId);
@@ -2081,7 +2125,7 @@
     }
 
     setAdminStatus(
-      `Επιλέχθηκε ${selected ? "Ζ1 / Ζ2" : "Ζ"}. Πάτησε ΑΠΟΘΗΚΕΥΣΗ ΤΥΠΟΥ ΜΕΤΡΗΤΗ για εφαρμογή.`
+      `Επιλέχθηκε ${selected ? "Ζ1 / Ζ2" : "Ζ"}. Πάτησε ΑΠΟΘΗΚΕΥΣΗ ΤΙΜΟΛΟΓΙΟΥ για εφαρμογή.`
     );
   });
 
@@ -2122,7 +2166,7 @@
 
     sendAdmin(
       `tariff_mode_set|${enabled ? "dual" : "mono"}`,
-      "Αποθήκευση τύπου μετρητή…"
+      "Αποθήκευση τιμολογίου…"
     );
   });
 

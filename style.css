@@ -1359,3 +1359,33 @@ input:focus { border-color: #2b9c88; box-shadow: 0 0 0 3px rgba(43,156,136,.13);
     font-size: .58rem;
   }
 }
+
+
+/* ===== MQTT.app. v2.06 meter type + OTA availability ===== */
+.meter-type-settings h3 {
+  margin: 2px 0 4px;
+}
+.settings-divider {
+  height: 1px;
+  margin: 16px 0;
+  background: #dbe5ea;
+}
+
+.ota-none-line {
+  display: block;
+  color: #6f7f8d;
+  font-size: .82rem;
+  font-weight: 800;
+}
+.ota-new-blink {
+  display: inline-block;
+  font-weight: 950;
+  animation: ota-new-pulse .9s steps(1, end) infinite;
+}
+@keyframes ota-new-pulse {
+  0%, 48% { opacity: 1; }
+  49%, 100% { opacity: .18; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ota-new-blink { animation: none; }
+}
