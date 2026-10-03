@@ -1207,3 +1207,87 @@ input:focus { border-color: #2b9c88; box-shadow: 0 0 0 3px rgba(43,156,136,.13);
   .utility-history-dialog { width: calc(100% - 14px); }
   .utility-history-table { min-width: 650px; }
 }
+
+
+/* ===== v2.03 T.K. / E.K. guided readings ===== */
+.utility-latest-summary {
+  display: grid;
+  gap: 8px;
+  margin: 10px 0 14px;
+  padding: 13px;
+  border: 1px solid #dbe5ea;
+  border-radius: 12px;
+  background: #fff;
+}
+.utility-latest-values {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 18px;
+  align-items: baseline;
+}
+.utility-latest-values span { display: grid; gap: 2px; }
+.utility-latest-values small {
+  color: #6f7f8d;
+  font-weight: 800;
+  font-size: .7rem;
+}
+.utility-latest-values strong { font-size: 1rem; }
+.utility-latest-meta { color: #60717e; font-size: .74rem; font-weight: 700; }
+.utility-reading-settings .full-btn + .full-btn { margin-top: 8px; }
+
+.utility-entry-dialog { max-width: 560px; }
+.utility-step-label { margin: 5px 0 0; color: #6f7f8d; font-size: .72rem; font-weight: 800; }
+.utility-step h3 { margin: 4px 0 12px; }
+.utility-kind-grid { display: grid; gap: 10px; }
+.utility-kind-card {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 4px 10px;
+  padding: 12px;
+  margin: 0;
+  border: 1px solid #d4e0e6;
+  border-radius: 12px;
+  background: #fff;
+  cursor: pointer;
+}
+.utility-kind-card input { width: auto; margin: 3px 0 0; grid-row: 1 / span 2; }
+.utility-kind-card span { color: #243746; font-weight: 800; }
+.utility-kind-card small { color: #6f7f8d; line-height: 1.35; }
+.utility-confirm-summary {
+  display: grid;
+  gap: 8px;
+  padding: 13px;
+  border-radius: 12px;
+  background: #fff;
+  border: 1px solid #dbe5ea;
+  color: #405366;
+  font-size: .8rem;
+}
+.utility-confirm-values {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 18px;
+  padding-bottom: 7px;
+  border-bottom: 1px solid #e2e9ed;
+  color: #132635;
+  font-size: .94rem;
+}
+.reading-kind {
+  display: inline-block;
+  min-width: 38px;
+  padding: 4px 6px;
+  border-radius: 999px;
+  text-align: center;
+  font-size: .66rem;
+  font-weight: 900;
+}
+.kind-tk { background: #e5f5ef; color: #11705f; }
+.kind-ek { background: #edf1f8; color: #445b7a; }
+.deviation-cell { font-variant-numeric: tabular-nums; }
+.history-note { margin: 12px 0 0; color: #6f7f8d; font-size: .7rem; line-height: 1.45; }
+.utility-history-dual { min-width: 850px; }
+
+@media (max-width: 620px) {
+  .utility-entry-dialog { width: calc(100% - 14px); }
+  .utility-latest-values { display: grid; }
+}

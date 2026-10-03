@@ -1,4 +1,4 @@
-const CACHE_NAME = "energy-dds-jsy-pwa-v2.0.2";
+const CACHE_NAME = "energy-dds-jsy-pwa-v2.0.3";
 const APP_SHELL = [
   "./",
   "./index.html",

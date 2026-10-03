@@ -15,7 +15,7 @@
     path: "/mqtt"
   };
 
-  const APP_VERSION = "2.02";
+  const APP_VERSION = "2.03";
   const AUTO_REFRESH_MS = 60000;
   const OTA_ACK_TIMEOUT_MS = 12000;
   const OTA_POLL_MS = 5000;
@@ -42,7 +42,11 @@
   let otaTimeoutTimer = null;
   let otaElapsedTimer = null;
   let editingUtilityId = null;
+  let utilityEntryStep = 0;
   let utilityHistoryRows = [];
+  let utilityHistoryDeviceId = null;
+  let utilityListIntent = "summary";
+  const MIN_DEVIATION_KWH = 1.0;
 
   const $ = (id) => document.getElementById(id);
 
@@ -74,6 +78,21 @@
     adminTitle: $("adminTitle"),
     utilityReadingSettings: $("utilityReadingSettings"),
     utilityReadingTitle: $("utilityReadingTitle"),
+    utilityLatestSummary: $("utilityLatestSummary"),
+    startUtilityReadingBtn: $("startUtilityReadingBtn"),
+    utilityEntryDialog: $("utilityEntryDialog"),
+    utilityEntryTitle: $("utilityEntryTitle"),
+    utilityStepLabel: $("utilityStepLabel"),
+    utilityStepType: $("utilityStepType"),
+    utilityStepDate: $("utilityStepDate"),
+    utilityStepTime: $("utilityStepTime"),
+    utilityStepReading: $("utilityStepReading"),
+    utilityStepConfirm: $("utilityStepConfirm"),
+    utilityKindFinal: $("utilityKindFinal"),
+    utilityKindIntermediate: $("utilityKindIntermediate"),
+    utilityTariffLabel: $("utilityTariffLabel"),
+    utilityConfirmSummary: $("utilityConfirmSummary"),
+    closeUtilityEntryBtn: $("closeUtilityEntryBtn"),
     utilityDateInput: $("utilityDateInput"),
     utilityTimeInput: $("utilityTimeInput"),
     monoReadingFields: $("monoReadingFields"),
@@ -81,9 +100,7 @@
     utilityZInput: $("utilityZInput"),
     utilityZ1Input: $("utilityZ1Input"),
     utilityZ2Input: $("utilityZ2Input"),
-    utilityEditInfo: $("utilityEditInfo"),
     saveUtilityReadingBtn: $("saveUtilityReadingBtn"),
-    cancelUtilityEditBtn: $("cancelUtilityEditBtn"),
     utilityHistoryBtn: $("utilityHistoryBtn"),
     utilityHistoryDialog: $("utilityHistoryDialog"),
     utilityHistoryTitle: $("utilityHistoryTitle"),
@@ -578,6 +595,12 @@
     return `${y}-${m}-${d}`;
   }
 
+  function localTimeInputValue(date = new Date()) {
+    const h = String(date.getHours()).padStart(2, "0");
+    const m = String(date.getMinutes()).padStart(2, "0");
+    return `${h}:${m}`;
+  }
+
   function refreshDualZoneSettings(device) {
     const s = device.state || {};
     const supported =
@@ -1008,18 +1031,149 @@
     }
   }
 
+  function utilityCurrentDual() {
+    if (!adminTargetId) return false;
+    const device = devices.get(adminTargetId);
+    if (!device) return false;
+    return device.state.dual_zone === true || device.state.tariff_mode === "dual";
+  }
+
+  function utilityKindValue() {
+    return ui.utilityKindIntermediate.checked ? "ek" : "tk";
+  }
+
   function resetUtilityEditor() {
     editingUtilityId = null;
-    ui.utilityReadingTitle.textContent = "Νέα επίσημη μέτρηση";
-    ui.utilityEditInfo.textContent = "";
-    ui.utilityEditInfo.classList.add("hidden");
-    ui.cancelUtilityEditBtn.classList.add("hidden");
-    ui.saveUtilityReadingBtn.textContent = "ΚΑΤΑΧΩΡΗΣΗ";
+    utilityEntryStep = 0;
+    ui.utilityEntryTitle.textContent = "Νέα καταχώρηση";
+    ui.utilityKindFinal.checked = true;
+    ui.utilityKindIntermediate.checked = false;
     ui.utilityDateInput.value = localDateInputValue();
-    ui.utilityTimeInput.value = "";
+    ui.utilityTimeInput.value = localTimeInputValue();
     ui.utilityZInput.value = "";
     ui.utilityZ1Input.value = "";
     ui.utilityZ2Input.value = "";
+    setUtilityEntryStep(0);
+  }
+
+  function setUtilityEntryStep(step) {
+    utilityEntryStep = Math.max(0, Math.min(4, step));
+    const steps = [
+      ui.utilityStepType,
+      ui.utilityStepDate,
+      ui.utilityStepTime,
+      ui.utilityStepReading,
+      ui.utilityStepConfirm
+    ];
+    steps.forEach((node, index) => node.classList.toggle("hidden", index !== utilityEntryStep));
+    ui.utilityStepLabel.textContent = `Βήμα ${utilityEntryStep + 1} από 5`;
+  }
+
+  function updateUtilityReadingMode() {
+    const dual = utilityCurrentDual();
+    ui.monoReadingFields.classList.toggle("hidden", dual);
+    ui.dualReadingFields.classList.toggle("hidden", !dual);
+    ui.utilityTariffLabel.textContent = `Τιμολόγιο: ${dual ? "Διζωνικό Ζ1 / Ζ2" : "Μονοζωνικό Ζ"}`;
+  }
+
+  function openUtilityEntry(row = null) {
+    if (!adminTargetId) return;
+    const device = devices.get(adminTargetId);
+    if (!device) return;
+
+    if (!firmwareAtLeast((device.state || {}).firmware, 3, 4)) {
+      setAdminStatus("Οι καταχωρήσεις Τ.Κ./Ε.Κ. απαιτούν firmware v3.04+.", "error");
+      return;
+    }
+
+    const currentMode = utilityCurrentDual() ? "dual" : "mono";
+    if (row && row.mode !== currentMode) {
+      showToast("Για διόρθωση, το τιμολόγιο Ζ / Ζ1-Ζ2 πρέπει να είναι ίδιο με την εγγραφή.");
+      return;
+    }
+
+    resetUtilityEditor();
+    editingUtilityId = row ? row.id : null;
+    ui.utilityEntryTitle.textContent = row ? "Διόρθωση καταχώρησης" : "Νέα καταχώρηση";
+
+    if (row) {
+      ui.utilityKindFinal.checked = row.kind !== "ek";
+      ui.utilityKindIntermediate.checked = row.kind === "ek";
+      ui.utilityDateInput.value = row.date;
+      ui.utilityTimeInput.value = row.timeToken === "window" ? "" : row.timeToken;
+      if (row.mode === "dual") {
+        ui.utilityZ1Input.value = row.z1.toFixed(2);
+        ui.utilityZ2Input.value = row.z2.toFixed(2);
+      } else {
+        ui.utilityZInput.value = row.z.toFixed(2);
+      }
+    }
+
+    updateUtilityReadingMode();
+    setUtilityEntryStep(0);
+    if (!ui.utilityEntryDialog.open) ui.utilityEntryDialog.showModal();
+  }
+
+  function utilityStepValid(step) {
+    if (step === 0) return ui.utilityKindFinal.checked || ui.utilityKindIntermediate.checked;
+
+    if (step === 1) {
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(ui.utilityDateInput.value.trim())) {
+        showToast("Επίλεξε έγκυρη ημερομηνία μέτρησης.");
+        return false;
+      }
+      return true;
+    }
+
+    if (step === 2) {
+      if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(ui.utilityTimeInput.value.trim())) {
+        showToast("Επίλεξε την ώρα που πήρες την ένδειξη.");
+        return false;
+      }
+      return true;
+    }
+
+    if (step === 3) {
+      if (utilityCurrentDual()) {
+        const z1 = Number(ui.utilityZ1Input.value);
+        const z2 = Number(ui.utilityZ2Input.value);
+        if (!Number.isFinite(z1) || !Number.isFinite(z2) ||
+            z1 <= 0 || z2 <= 0 || z1 >= 999999 || z2 >= 999999) {
+          showToast("Γράψε έγκυρες ενδείξεις Ζ1 και Ζ2.");
+          return false;
+        }
+      } else {
+        const z = Number(ui.utilityZInput.value);
+        if (!Number.isFinite(z) || z <= 0 || z >= 999999) {
+          showToast("Γράψε έγκυρη ένδειξη Ζ.");
+          return false;
+        }
+      }
+      return true;
+    }
+
+    return true;
+  }
+
+  function prepareUtilityConfirmation() {
+    const form = readUtilityForm();
+    if (!form) return false;
+    const kindLabel = form.kind === "ek"
+      ? "Ε.Κ. — Ενδιάμεση Καταχώρηση"
+      : "Τ.Κ. — Τελική Καταχώρηση";
+
+    const values = form.dual
+      ? `<div class="utility-confirm-values"><strong>Ζ1: ${formatNumber(form.z1, 2)} kWh</strong><strong>Ζ2: ${formatNumber(form.z2, 2)} kWh</strong></div>`
+      : `<div class="utility-confirm-values"><strong>Ζ: ${formatNumber(form.z, 2)} kWh</strong></div>`;
+
+    ui.utilityConfirmSummary.innerHTML = `
+      ${values}
+      <div>Τιμολόγιο: <b>${form.dual ? "Διζωνικό Ζ1 / Ζ2" : "Μονοζωνικό Ζ"}</b></div>
+      <div>Τύπος: <b>${kindLabel}</b></div>
+      <div>Ημερομηνία: <b>${escapeHtml(form.date)}</b></div>
+      <div>Ώρα: <b>${escapeHtml(form.time)}</b></div>
+    `;
+    return true;
   }
 
   function openAdmin(id) {
@@ -1027,6 +1181,8 @@
     if (!device) return;
 
     adminTargetId = id;
+    utilityHistoryRows = [];
+    utilityHistoryDeviceId = null;
     resetUtilityEditor();
 
     ui.adminEyebrow.textContent = `${meterName(device)} SETTINGS`;
@@ -1038,15 +1194,23 @@
       ? `Τρέχον firmware: ${fw}. Έτοιμο για remote OTA.`
       : `Τρέχον firmware: ${fw}. Το remote OTA απαιτεί 2.29+.`;
 
+    const supportsEntryTypes = firmwareAtLeast(fw, 3, 4);
     setAdminStatus(
-      firmwareAtLeast(fw, 3, 0)
+      supportsEntryTypes
         ? "Έτοιμο."
-        : "Οι νέες μετρήσεις ΔΕΗ απαιτούν firmware v3.00+.",
-      firmwareAtLeast(fw, 3, 0) ? "ok" : "error"
+        : (firmwareAtLeast(fw, 3, 0)
+            ? "Οι καταχωρήσεις Τ.Κ./Ε.Κ. απαιτούν firmware v3.04+."
+            : "Οι μετρήσεις απαιτούν firmware v3.00+."),
+      supportsEntryTypes ? "ok" : "error"
     );
 
+    renderUtilityLatestSummary(id);
     updateAdminButtons();
     ui.adminDialog.showModal();
+
+    if (firmwareAtLeast(fw, 3, 0) && client && client.connected) {
+      setTimeout(() => refreshUtilityRows(id, false), 0);
+    }
   }
 
   function setAdminStatus(message, kind = "") {
@@ -1061,15 +1225,20 @@
     const device = adminTargetId ? devices.get(adminTargetId) : null;
     const state = device ? (device.state || {}) : {};
     const supportsV3 = Boolean(device && firmwareAtLeast(state.firmware, 3, 0));
+    const supportsTypes = Boolean(device && firmwareAtLeast(state.firmware, 3, 4));
 
-    [
-      ui.saveUtilityReadingBtn,
-      ui.utilityHistoryBtn,
-      ui.saveDualZoneBtn
-    ].forEach((button) => {
-      if (button) button.disabled =
-        !adminTargetId || busy || !connected || !supportsV3;
-    });
+    if (ui.utilityHistoryBtn) {
+      ui.utilityHistoryBtn.disabled = !adminTargetId || busy || !connected || !supportsV3;
+    }
+    if (ui.startUtilityReadingBtn) {
+      ui.startUtilityReadingBtn.disabled = !adminTargetId || busy || !connected || !supportsTypes;
+    }
+    if (ui.saveDualZoneBtn) {
+      ui.saveDualZoneBtn.disabled = !adminTargetId || busy || !connected || !supportsV3;
+    }
+    if (ui.saveUtilityReadingBtn) {
+      ui.saveUtilityReadingBtn.disabled = !adminTargetId || busy || !connected || !supportsTypes;
+    }
 
     [
       ui.utilityDateInput,
@@ -1077,10 +1246,13 @@
       ui.utilityZInput,
       ui.utilityZ1Input,
       ui.utilityZ2Input,
+      ui.utilityKindFinal,
+      ui.utilityKindIntermediate,
       ui.dualZoneToggle
     ].forEach((control) => {
       if (control) control.disabled =
-        !adminTargetId || busy || !connected || !supportsV3;
+        !adminTargetId || busy || !connected ||
+        (control === ui.dualZoneToggle ? !supportsV3 : !supportsTypes);
     });
 
     if (ui.otaUpdateBtn) {
@@ -1093,22 +1265,22 @@
 
   function readUtilityForm() {
     if (!adminTargetId) return null;
-
     const device = devices.get(adminTargetId);
     if (!device) return null;
 
-    const dual =
-      device.state.dual_zone === true ||
-      device.state.tariff_mode === "dual";
-
+    const dual = utilityCurrentDual();
+    const kind = utilityKindValue();
     const date = ui.utilityDateInput.value.trim();
     const time = ui.utilityTimeInput.value.trim();
+
     if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
       setAdminStatus("Επίλεξε έγκυρη ημερομηνία μέτρησης.", "error");
       return null;
     }
-
-    const timeToken = time || "window";
+    if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(time)) {
+      setAdminStatus("Επίλεξε έγκυρη ώρα μέτρησης.", "error");
+      return null;
+    }
 
     if (dual) {
       const z1 = Number(ui.utilityZ1Input.value);
@@ -1118,10 +1290,9 @@
         setAdminStatus("Γράψε έγκυρες ενδείξεις Ζ1 και Ζ2.", "error");
         return null;
       }
-
       return {
-        dual: true,
-        commandTail: `dual|${date}|${timeToken}|${z1.toFixed(2)}|${z2.toFixed(2)}`
+        kind, dual: true, date, time, z1, z2,
+        commandTail: `${kind}|dual|${date}|${time}|${z1.toFixed(2)}|${z2.toFixed(2)}`
       };
     }
 
@@ -1130,10 +1301,9 @@
       setAdminStatus("Γράψε έγκυρη ένδειξη Ζ.", "error");
       return null;
     }
-
     return {
-      dual: false,
-      commandTail: `mono|${date}|${timeToken}|${z.toFixed(2)}`
+      kind, dual: false, date, time, z,
+      commandTail: `${kind}|mono|${date}|${time}|${z.toFixed(2)}`
     };
   }
 
@@ -1151,21 +1321,12 @@
     });
   }
 
-  function utilitySpanMessage(data) {
+  function utilitySaveMessage(data) {
+    const kind = data && data.kind === "ek" ? "Ε.Κ." : "Τ.Κ.";
     if (!data || data.mapped !== true) {
-      return "Η μέτρηση αποθηκεύτηκε. Δεν υπάρχει αρκετό εσωτερικό ιστορικό για να αντιστοιχιστεί ακόμη η ημερομηνία.";
+      return `Η ${kind} αποθηκεύτηκε. Δεν υπάρχει αρκετό εσωτερικό ιστορικό για υπολογισμό απόκλισης.`;
     }
-
-    if (Object.prototype.hasOwnProperty.call(data, "z1_span")) {
-      const a = Number(data.z1_span) || 0;
-      const b = Number(data.z2_span) || 0;
-      if (a <= 0 && b <= 0) return "Η μέτρηση αποθηκεύτηκε με ακριβή ώρα.";
-      return `Η μέτρηση αποθηκεύτηκε. Εσωτερικό span: Ζ1 ${formatNumber(a, 2)} kWh · Ζ2 ${formatNumber(b, 2)} kWh.`;
-    }
-
-    const span = Number(data.span) || 0;
-    if (span <= 0) return "Η μέτρηση αποθηκεύτηκε με ακριβή ώρα.";
-    return `Η μέτρηση αποθηκεύτηκε. Εσωτερικό span 08:00–18:00: ${formatNumber(span, 2)} kWh.`;
+    return `Η ${kind} αποθηκεύτηκε.`;
   }
 
   function handleAdminResponse(id, text) {
@@ -1231,26 +1392,27 @@
 
     if (data.cmd === "utility_reading_add" ||
         data.cmd === "utility_reading_update") {
-      const msg = utilitySpanMessage(data);
+      const msg = utilitySaveMessage(data);
       if (adminTargetId === id) {
         setAdminStatus(msg, "ok");
+        if (ui.utilityEntryDialog.open) ui.utilityEntryDialog.close();
         resetUtilityEditor();
       }
-      showToast(`${id}: μέτρηση ΔΕΗ αποθηκεύτηκε`, 4500);
+      showToast(`${id}: καταχώρηση αποθηκεύτηκε`, 4500);
       setTimeout(() => requestUpdate(id, false), 250);
+      setTimeout(() => {
+        if (adminTargetId === id) refreshUtilityRows(id, false);
+      }, 450);
       return;
     }
 
     if (data.cmd === "utility_reading_delete") {
-      if (adminTargetId === id) setAdminStatus("Η μέτρηση ΔΕΗ διαγράφηκε.", "ok");
-      showToast(`${id}: η μέτρηση ΔΕΗ διαγράφηκε`);
+      if (adminTargetId === id) setAdminStatus("Η καταχώρηση διαγράφηκε.", "ok");
+      showToast(`${id}: η καταχώρηση διαγράφηκε`);
       setTimeout(() => requestUpdate(id, false), 250);
-      if (ui.utilityHistoryDialog.open) {
-        setTimeout(() => {
-          csvBuffers.delete(id);
-          sendAdmin("utility_readings_list", "Ανανέωση ιστορικού ΔΕΗ…");
-        }, 400);
-      }
+      setTimeout(() => {
+        if (adminTargetId === id) refreshUtilityRows(id, ui.utilityHistoryDialog.open);
+      }, 400);
       return;
     }
 
@@ -1275,20 +1437,46 @@
     showToast(`${id}: ${msg}`);
   }
 
+  function utilitySortTime(row) {
+    if (row.timeToken && row.timeToken !== "window") return row.timeToken;
+    return "13:00";
+  }
+
   function parseUtilityHistoryRows(rows) {
     return rows
       .filter((row) => !row.startsWith("ID,"))
       .map((row) => {
         const f = row.split(",");
+        if (f.length >= 12 && (f[3] === "tk" || f[3] === "ek")) {
+          return {
+            id: Number(f[0]),
+            date: f[1],
+            mode: f[2],
+            kind: f[3],
+            z: Number(f[4]),
+            z1: Number(f[5]),
+            z2: Number(f[6]),
+            timeToken: f[7] || "window",
+            mapped: f[8] === "1",
+            anchor: Number(f[9]),
+            anchorZ1: Number(f[10]),
+            anchorZ2: Number(f[11])
+          };
+        }
         if (f.length < 7) return null;
         return {
           id: Number(f[0]),
           date: f[1],
           mode: f[2],
+          kind: "tk",
           z: Number(f[3]),
           z1: Number(f[4]),
           z2: Number(f[5]),
-          timeToken: f[6] || "window"
+          timeToken: f[6] || "window",
+          mapped: false,
+          anchor: NaN,
+          anchorZ1: NaN,
+          anchorZ2: NaN
         };
       })
       .filter((row) =>
@@ -1296,11 +1484,56 @@
         Number.isFinite(row.id) &&
         /^\d{4}-\d{2}-\d{2}$/.test(row.date)
       )
-      .sort((a, b) => a.date.localeCompare(b.date) || a.id - b.id);
+      .sort((a, b) =>
+        a.date.localeCompare(b.date) ||
+        utilitySortTime(a).localeCompare(utilitySortTime(b)) ||
+        a.id - b.id
+      );
   }
 
-  function utilityActionButtons(row, currentMode) {
-    const canEdit = row.mode === currentMode;
+  function formatUtilityDate(date) {
+    const m = String(date || "").match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    return m ? `${m[3]}/${m[2]}/${m[1]}` : String(date || "—");
+  }
+
+  function utilityDateTimeLabel(row) {
+    const time = row.timeToken && row.timeToken !== "window" ? row.timeToken : "—";
+    return `${formatUtilityDate(row.date)} ${time}`;
+  }
+
+  function utilityKindBadge(row) {
+    const isEk = row.kind === "ek";
+    return `<span class="reading-kind ${isEk ? "kind-ek" : "kind-tk"}" title="${isEk ? "Ενδιάμεση Καταχώρηση" : "Τελική Καταχώρηση"}">${isEk ? "Ε.Κ." : "Τ.Κ."}</span>`;
+  }
+
+  function utilityDeviation(previous, row) {
+    if (!previous || !previous.mapped || !row.mapped || previous.mode !== row.mode) return null;
+
+    let realDelta;
+    let espDelta;
+    if (row.mode === "dual") {
+      realDelta = (row.z1 + row.z2) - (previous.z1 + previous.z2);
+      if (![row.anchorZ1, row.anchorZ2, previous.anchorZ1, previous.anchorZ2].every(Number.isFinite)) return null;
+      espDelta = (row.anchorZ1 + row.anchorZ2) - (previous.anchorZ1 + previous.anchorZ2);
+    } else {
+      realDelta = row.z - previous.z;
+      if (![row.anchor, previous.anchor].every(Number.isFinite)) return null;
+      espDelta = row.anchor - previous.anchor;
+    }
+
+    if (!Number.isFinite(realDelta) || !Number.isFinite(espDelta) ||
+        realDelta < MIN_DEVIATION_KWH || espDelta < 0) return null;
+    return ((espDelta - realDelta) / realDelta) * 100;
+  }
+
+  function deviationText(value) {
+    if (!Number.isFinite(value)) return "—";
+    const sign = value > 0 ? "+" : "";
+    return `${sign}${formatNumber(value, 2)}%`;
+  }
+
+  function utilityActionButtons(row, currentMode, firmware) {
+    const canEdit = row.mode === currentMode && firmwareAtLeast(firmware, 3, 4);
     return `
       <div class="history-actions">
         <button class="secondary-btn history-btn" type="button"
@@ -1311,39 +1544,73 @@
       </div>`;
   }
 
+  function renderUtilityLatestSummary(id) {
+    const device = devices.get(id);
+    if (!device || !ui.utilityLatestSummary) return;
+
+    const dualNow = device.state.dual_zone === true || device.state.tariff_mode === "dual";
+    if (utilityHistoryDeviceId !== id) {
+      ui.utilityLatestSummary.innerHTML = `
+        <div class="utility-latest-values"><strong>Φόρτωση τελευταίας μέτρησης…</strong></div>
+        <div class="utility-latest-meta">Τιμολόγιο: ${dualNow ? "Διζωνικό Ζ1 / Ζ2" : "Μονοζωνικό Ζ"}</div>
+        <div class="utility-latest-meta">Ημερομηνία – Ώρα: —</div>`;
+      return;
+    }
+
+    const finals = utilityHistoryRows.filter((row) => row.kind !== "ek");
+    const latest = finals.length ? finals[finals.length - 1] : null;
+    if (!latest) {
+      ui.utilityLatestSummary.innerHTML = `
+        <div class="utility-latest-values"><strong>Τελευταία μέτρηση ΔΕΗ: —</strong></div>
+        <div class="utility-latest-meta">Τιμολόγιο: ${dualNow ? "Διζωνικό Ζ1 / Ζ2" : "Μονοζωνικό Ζ"}</div>
+        <div class="utility-latest-meta">Ημερομηνία – Ώρα: —</div>`;
+      return;
+    }
+
+    const values = latest.mode === "dual"
+      ? `<span><small>Ζ1</small><strong>${formatNumber(latest.z1, 2)} kWh</strong></span><span><small>Ζ2</small><strong>${formatNumber(latest.z2, 2)} kWh</strong></span>`
+      : `<span><small>Ζ</small><strong>${formatNumber(latest.z, 2)} kWh</strong></span>`;
+
+    ui.utilityLatestSummary.innerHTML = `
+      <div class="utility-latest-values">${values}</div>
+      <div class="utility-latest-meta">Τιμολόγιο: ${latest.mode === "dual" ? "Διζωνικό Ζ1 / Ζ2" : "Μονοζωνικό Ζ"}</div>
+      <div class="utility-latest-meta">Ημερομηνία – Ώρα: ${escapeHtml(utilityDateTimeLabel(latest))}</div>`;
+  }
+
   function renderUtilityHistory(id) {
     const device = devices.get(id);
     if (!device) return;
-
     const currentMode =
       device.state.dual_zone === true || device.state.tariff_mode === "dual"
-        ? "dual"
-        : "mono";
-
+        ? "dual" : "mono";
+    const firmware = String((device.state || {}).firmware || "");
     const monoRows = utilityHistoryRows.filter((row) => row.mode === "mono");
     const dualRows = utilityHistoryRows.filter((row) => row.mode === "dual");
-
     const sections = [];
 
     if (monoRows.length) {
       let previous = null;
       const body = monoRows.map((row) => {
         const diff = previous ? row.z - previous.z : null;
-        previous = row;
-        return `
+        const deviation = utilityDeviation(previous, row);
+        const html = `
           <tr>
-            <td>${escapeHtml(row.date)}</td>
-            <td><b>${diff === null ? "—" : formatNumber(diff, 2) + " kWh"}</b></td>
-            <td>${formatNumber(row.z, 2)} kWh</td>
-            <td>${utilityActionButtons(row, currentMode)}</td>
+            <td>${escapeHtml(utilityDateTimeLabel(row))}</td>
+            <td>${utilityKindBadge(row)}</td>
+            <td><b>${diff === null ? "—" : formatNumber(diff, 2)}</b></td>
+            <td>${formatNumber(row.z, 2)}</td>
+            <td class="deviation-cell"><b>${deviationText(deviation)}</b></td>
+            <td>${utilityActionButtons(row, currentMode, firmware)}</td>
           </tr>`;
+        previous = row;
+        return html;
       }).join("");
 
       sections.push(`
         <h3>Μετρήσεις Ζ</h3>
         <div class="history-table-wrap">
           <table class="utility-history-table">
-            <thead><tr><th>Ημερομηνία</th><th>Διαφορά</th><th>Ζ</th><th></th></tr></thead>
+            <thead><tr><th>Ημερομηνία / Ώρα</th><th>Τύπος</th><th>Διαφορά</th><th>Ζ</th><th>Απόκλιση</th><th></th></tr></thead>
             <tbody>${body}</tbody>
           </table>
         </div>`);
@@ -1355,80 +1622,67 @@
         const dz1 = previous ? row.z1 - previous.z1 : null;
         const dz2 = previous ? row.z2 - previous.z2 : null;
         const total = previous ? dz1 + dz2 : null;
-        previous = row;
-
-        return `
+        const deviation = utilityDeviation(previous, row);
+        const html = `
           <tr>
-            <td>${escapeHtml(row.date)}</td>
+            <td>${escapeHtml(utilityDateTimeLabel(row))}</td>
+            <td>${utilityKindBadge(row)}</td>
             <td><b>${dz1 === null ? "—" : formatNumber(dz1, 2)}</b></td>
             <td>${formatNumber(row.z1, 2)}</td>
             <td><b>${dz2 === null ? "—" : formatNumber(dz2, 2)}</b></td>
             <td>${formatNumber(row.z2, 2)}</td>
             <td><b>${total === null ? "—" : formatNumber(total, 2)}</b></td>
-            <td>${utilityActionButtons(row, currentMode)}</td>
+            <td class="deviation-cell"><b>${deviationText(deviation)}</b></td>
+            <td>${utilityActionButtons(row, currentMode, firmware)}</td>
           </tr>`;
+        previous = row;
+        return html;
       }).join("");
 
       sections.push(`
         <h3>Μετρήσεις Ζ1 / Ζ2</h3>
         <div class="history-table-wrap">
-          <table class="utility-history-table">
+          <table class="utility-history-table utility-history-dual">
             <thead>
-              <tr><th>Ημερομηνία</th><th>Δ Ζ1</th><th>Ζ1</th><th>Δ Ζ2</th><th>Ζ2</th><th>Σύνολο Δ</th><th></th></tr>
+              <tr><th>Ημερομηνία / Ώρα</th><th>Τύπος</th><th>Δ Ζ1</th><th>Ζ1</th><th>Δ Ζ2</th><th>Ζ2</th><th>Σύνολο Δ</th><th>Απόκλιση</th><th></th></tr>
             </thead>
             <tbody>${body}</tbody>
           </table>
         </div>`);
     }
 
-    ui.utilityHistoryTitle.textContent = `Μετρήσεις ΔΕΗ · ${id}`;
+    if (sections.length) {
+      sections.push(`<p class="history-note">Η % απόκλιση είναι συμβουλευτική και συγκρίνει τη μεταβολή του ESP με τη μεταβολή ανάμεσα σε δύο διαδοχικές πραγματικές καταχωρήσεις. Για μεταβολή κάτω από ${formatNumber(MIN_DEVIATION_KWH, 1)} kWh εμφανίζεται —.</p>`);
+    }
+
+    ui.utilityHistoryTitle.textContent = `Πίνακας μετρήσεων · ${id}`;
     ui.utilityHistoryContent.innerHTML = sections.length
       ? sections.join("")
-      : '<p class="admin-help">Δεν έχει καταχωρηθεί ακόμη μέτρηση ΔΕΗ.</p>';
+      : '<p class="admin-help">Δεν έχει καταχωρηθεί ακόμη μέτρηση.</p>';
 
     if (!ui.utilityHistoryDialog.open) ui.utilityHistoryDialog.showModal();
   }
 
   function startUtilityEdit(row) {
     if (!row || !adminTargetId) return;
-
-    const device = devices.get(adminTargetId);
-    if (!device) return;
-
-    const currentMode =
-      device.state.dual_zone === true || device.state.tariff_mode === "dual"
-        ? "dual"
-        : "mono";
-
-    if (row.mode !== currentMode) {
-      showToast("Για διόρθωση, ο τύπος Ζ / Ζ1-Ζ2 πρέπει να είναι ίδιος με την εγγραφή.");
-      return;
-    }
-
-    editingUtilityId = row.id;
-    ui.utilityReadingTitle.textContent = "Διόρθωση μέτρησης ΔΕΗ";
-    ui.utilityEditInfo.textContent = `Διόρθωση εγγραφής #${row.id}`;
-    ui.utilityEditInfo.classList.remove("hidden");
-    ui.cancelUtilityEditBtn.classList.remove("hidden");
-    ui.saveUtilityReadingBtn.textContent = "ΑΠΟΘΗΚΕΥΣΗ ΔΙΟΡΘΩΣΗΣ";
-
-    ui.utilityDateInput.value = row.date;
-    ui.utilityTimeInput.value = row.timeToken === "window" ? "" : row.timeToken;
-
-    if (row.mode === "dual") {
-      ui.utilityZ1Input.value = row.z1.toFixed(2);
-      ui.utilityZ2Input.value = row.z2.toFixed(2);
-    } else {
-      ui.utilityZInput.value = row.z.toFixed(2);
-    }
-
+    openUtilityEntry(row);
     if (ui.utilityHistoryDialog.open) ui.utilityHistoryDialog.close();
+  }
+
+  function refreshUtilityRows(id, openHistory) {
+    if (!id || !client || !client.connected) return;
+    utilityListIntent = openHistory ? "history" : "summary";
+    csvBuffers.delete(id);
+    sendAdmin(
+      "utility_readings_list",
+      openHistory ? "Λήψη πίνακα μετρήσεων…" : "Λήψη τελευταίας μέτρησης…"
+    );
   }
 
   function handleCsv(id, text) {
     if (text.startsWith("BEGIN|UTILITY|")) {
       csvBuffers.set(id, { type: "utility", rows: [] });
-      if (adminTargetId === id) setAdminStatus("Λήψη ιστορικού μετρήσεων ΔΕΗ…");
+      if (adminTargetId === id) setAdminStatus("Λήψη καταχωρήσεων…");
       return;
     }
 
@@ -1450,8 +1704,13 @@
 
       if (buffer.type === "utility") {
         utilityHistoryRows = parseUtilityHistoryRows(buffer.rows);
-        if (adminTargetId === id) setAdminStatus("Το ιστορικό ΔΕΗ φορτώθηκε.", "ok");
-        renderUtilityHistory(id);
+        utilityHistoryDeviceId = id;
+        if (adminTargetId === id) {
+          setAdminStatus("Οι καταχωρήσεις φορτώθηκαν.", "ok");
+          renderUtilityLatestSummary(id);
+        }
+        if (utilityListIntent === "history") renderUtilityHistory(id);
+        utilityListIntent = "summary";
       }
     }
   }
@@ -1695,6 +1954,30 @@
     }
   });
 
+  ui.startUtilityReadingBtn.addEventListener("click", () => openUtilityEntry());
+
+  ui.closeUtilityEntryBtn.addEventListener("click", () => {
+    ui.utilityEntryDialog.close();
+    resetUtilityEditor();
+  });
+
+  ui.utilityEntryDialog.addEventListener("click", (event) => {
+    const button = event.target.closest("[data-entry-action]");
+    if (!button) return;
+    const action = button.dataset.entryAction;
+
+    if (action === "back") {
+      setUtilityEntryStep(utilityEntryStep - 1);
+      return;
+    }
+
+    if (action === "next") {
+      if (!utilityStepValid(utilityEntryStep)) return;
+      if (utilityEntryStep === 3 && !prepareUtilityConfirmation()) return;
+      setUtilityEntryStep(utilityEntryStep + 1);
+    }
+  });
+
   ui.saveUtilityReadingBtn.addEventListener("click", () => {
     const form = readUtilityForm();
     if (!form) return;
@@ -1702,26 +1985,19 @@
     const command = editingUtilityId
       ? `utility_reading_update|${editingUtilityId}|${form.commandTail}`
       : `utility_reading_add|${form.commandTail}`;
+    const label = form.kind === "ek" ? "Ε.Κ." : "Τ.Κ.";
 
     sendAdmin(
       command,
       editingUtilityId
-        ? "Αποθήκευση διόρθωσης μέτρησης ΔΕΗ…"
-        : "Καταχώρηση μέτρησης ΔΕΗ…"
+        ? `Αποθήκευση διόρθωσης ${label}…`
+        : `Καταχώρηση ${label}…`
     );
-  });
-
-  ui.cancelUtilityEditBtn.addEventListener("click", () => {
-    resetUtilityEditor();
-    const device = adminTargetId ? devices.get(adminTargetId) : null;
-    if (device) refreshDualZoneSettings(device);
-    setAdminStatus("Η διόρθωση ακυρώθηκε.", "ok");
   });
 
   ui.utilityHistoryBtn.addEventListener("click", () => {
     if (!adminTargetId) return;
-    csvBuffers.delete(adminTargetId);
-    sendAdmin("utility_readings_list", "Λήψη ιστορικού μετρήσεων ΔΕΗ…");
+    refreshUtilityRows(adminTargetId, true);
   });
 
   ui.closeUtilityHistoryBtn.addEventListener("click", () => {
@@ -1742,11 +2018,12 @@
     }
 
     if (button.dataset.utilityAction === "delete") {
-      if (!window.confirm(`Να διαγραφεί η μέτρηση ΔΕΗ ${row.date};`)) return;
+      const kind = row.kind === "ek" ? "Ε.Κ." : "Τ.Κ.";
+      if (!window.confirm(`Να διαγραφεί η ${kind} ${utilityDateTimeLabel(row)};`)) return;
       if (ui.utilityHistoryDialog.open) ui.utilityHistoryDialog.close();
       sendAdmin(
         `utility_reading_delete|${row.id}`,
-        "Διαγραφή μέτρησης ΔΕΗ…"
+        "Διαγραφή καταχώρησης…"
       );
     }
   });
@@ -1756,6 +2033,9 @@
     ui.dualZoneDetails.classList.toggle("hidden", !enabled);
     ui.monoReadingFields.classList.toggle("hidden", enabled);
     ui.dualReadingFields.classList.toggle("hidden", !enabled);
+    if (ui.utilityTariffLabel) {
+      ui.utilityTariffLabel.textContent = `Τιμολόγιο: ${enabled ? "Διζωνικό Ζ1 / Ζ2" : "Μονοζωνικό Ζ"}`;
+    }
   });
 
   ui.saveDualZoneBtn.addEventListener("click", () => {

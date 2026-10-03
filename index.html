@@ -118,48 +118,17 @@
       </div>
 
       <section id="utilityReadingSettings" class="settings-section utility-reading-settings">
-        <p class="eyebrow">ΜΕΤΡΗΣΗ ΔΕΗ</p>
-        <h3 id="utilityReadingTitle">Νέα επίσημη μέτρηση</h3>
+        <p class="eyebrow">ΚΑΤΑΧΩΡΗΣΕΙΣ ΜΕΤΡΗΤΗ</p>
+        <h3 id="utilityReadingTitle">Τελευταία μέτρηση ΔΕΗ</h3>
 
-        <div class="form-grid">
-          <label>
-            Ημερομηνία μέτρησης
-            <input id="utilityDateInput" type="date" required>
-          </label>
-          <label>
-            Ώρα — αν είναι γνωστή
-            <input id="utilityTimeInput" type="time">
-          </label>
+        <div id="utilityLatestSummary" class="utility-latest-summary">
+          <div class="utility-latest-values"><strong>—</strong></div>
+          <div class="utility-latest-meta">Τιμολόγιο: —</div>
+          <div class="utility-latest-meta">Ημερομηνία – Ώρα: —</div>
         </div>
 
-        <p class="admin-help">Αν η ώρα μείνει κενή, ο ESP χρησιμοποιεί εσωτερικά το γνωστό παράθυρο μέτρησης 08:00–18:00.</p>
-
-        <div id="monoReadingFields">
-          <label>
-            Ένδειξη Ζ (kWh)
-            <input id="utilityZInput" type="number" inputmode="decimal" min="0.01" max="999998.99" step="0.01" placeholder="π.χ. 35255.00">
-          </label>
-        </div>
-
-        <div id="dualReadingFields" class="form-grid hidden">
-          <label>
-            Ένδειξη Ζ1 (kWh)
-            <input id="utilityZ1Input" type="number" inputmode="decimal" min="0.01" max="999998.99" step="0.01">
-          </label>
-          <label>
-            Ένδειξη Ζ2 (kWh)
-            <input id="utilityZ2Input" type="number" inputmode="decimal" min="0.01" max="999998.99" step="0.01">
-          </label>
-        </div>
-
-        <p id="utilityEditInfo" class="admin-help hidden"></p>
-
-        <div class="admin-action-grid">
-          <button id="saveUtilityReadingBtn" class="primary-btn admin-btn" type="button">ΚΑΤΑΧΩΡΗΣΗ</button>
-          <button id="cancelUtilityEditBtn" class="secondary-btn admin-btn hidden" type="button">ΑΚΥΡΩΣΗ ΔΙΟΡΘΩΣΗΣ</button>
-        </div>
-
-        <button id="utilityHistoryBtn" class="secondary-btn admin-btn full-btn" type="button">ΙΣΤΟΡΙΚΟ ΜΕΤΡΗΣΕΩΝ ΔΕΗ</button>
+        <button id="startUtilityReadingBtn" class="primary-btn admin-btn full-btn" type="button">ΚΑΤΑΧΩΡΗΣΗ</button>
+        <button id="utilityHistoryBtn" class="secondary-btn admin-btn full-btn" type="button">ΠΙΝΑΚΑΣ ΜΕΤΡΗΣΕΩΝ</button>
       </section>
 
       <section class="settings-section ota-settings">
@@ -171,6 +140,97 @@
       </section>
 
       <p id="adminStatus" class="admin-status">Έτοιμο.</p>
+    </div>
+  </dialog>
+
+  <dialog id="utilityEntryDialog" class="utility-entry-dialog">
+    <div class="admin-dialog-body">
+      <div class="dialog-head">
+        <div>
+          <p class="eyebrow">ΚΑΤΑΧΩΡΗΣΗ ΜΕΤΡΗΣΗΣ</p>
+          <h2 id="utilityEntryTitle">Νέα καταχώρηση</h2>
+          <p id="utilityStepLabel" class="utility-step-label">Βήμα 1 από 5</p>
+        </div>
+        <button id="closeUtilityEntryBtn" class="icon-btn light" type="button" aria-label="Κλείσιμο">×</button>
+      </div>
+
+      <section id="utilityStepType" class="utility-step">
+        <h3>Τύπος καταχώρησης</h3>
+        <div class="utility-kind-grid">
+          <label class="utility-kind-card">
+            <input id="utilityKindFinal" type="radio" name="utilityKind" value="tk" checked>
+            <span><b>Τ.Κ.</b> Τελική Καταχώρηση</span>
+            <small>Επίσημη μέτρηση ΔΕΗ. Χρησιμοποιείται ως επίσημη βάση.</small>
+          </label>
+          <label class="utility-kind-card">
+            <input id="utilityKindIntermediate" type="radio" name="utilityKind" value="ek">
+            <span><b>Ε.Κ.</b> Ενδιάμεση Καταχώρηση</span>
+            <small>Δική σου ενδιάμεση μέτρηση για έλεγχο και σύγκριση.</small>
+          </label>
+        </div>
+        <div class="dialog-actions">
+          <button class="primary-btn" type="button" data-entry-action="next">ΣΥΝΕΧΕΙΑ</button>
+        </div>
+      </section>
+
+      <section id="utilityStepDate" class="utility-step hidden">
+        <h3>Ημερομηνία μέτρησης</h3>
+        <label>
+          Ημερομηνία
+          <input id="utilityDateInput" type="date" required>
+        </label>
+        <div class="dialog-actions">
+          <button class="secondary-btn" type="button" data-entry-action="back">ΠΙΣΩ</button>
+          <button class="primary-btn" type="button" data-entry-action="next">ΣΥΝΕΧΕΙΑ</button>
+        </div>
+      </section>
+
+      <section id="utilityStepTime" class="utility-step hidden">
+        <h3>Ώρα μέτρησης</h3>
+        <label>
+          Ώρα
+          <input id="utilityTimeInput" type="time" required>
+        </label>
+        <p class="admin-help">Προτείνεται η τρέχουσα ώρα. Άλλαξέ την αν η ένδειξη λήφθηκε νωρίτερα.</p>
+        <div class="dialog-actions">
+          <button class="secondary-btn" type="button" data-entry-action="back">ΠΙΣΩ</button>
+          <button class="primary-btn" type="button" data-entry-action="next">ΣΥΝΕΧΕΙΑ</button>
+        </div>
+      </section>
+
+      <section id="utilityStepReading" class="utility-step hidden">
+        <h3>Ένδειξη μετρητή</h3>
+        <div id="monoReadingFields">
+          <label>
+            Ένδειξη Ζ (kWh)
+            <input id="utilityZInput" type="number" inputmode="decimal" min="0.01" max="999998.99" step="0.01">
+          </label>
+        </div>
+        <div id="dualReadingFields" class="form-grid hidden">
+          <label>
+            Ένδειξη Ζ1 (kWh)
+            <input id="utilityZ1Input" type="number" inputmode="decimal" min="0.01" max="999998.99" step="0.01">
+          </label>
+          <label>
+            Ένδειξη Ζ2 (kWh)
+            <input id="utilityZ2Input" type="number" inputmode="decimal" min="0.01" max="999998.99" step="0.01">
+          </label>
+        </div>
+        <p id="utilityTariffLabel" class="admin-help">Τιμολόγιο: —</p>
+        <div class="dialog-actions">
+          <button class="secondary-btn" type="button" data-entry-action="back">ΠΙΣΩ</button>
+          <button class="primary-btn" type="button" data-entry-action="next">ΣΥΝΕΧΕΙΑ</button>
+        </div>
+      </section>
+
+      <section id="utilityStepConfirm" class="utility-step hidden">
+        <h3>Επιβεβαίωση</h3>
+        <div id="utilityConfirmSummary" class="utility-confirm-summary"></div>
+        <div class="dialog-actions">
+          <button class="secondary-btn" type="button" data-entry-action="back">ΠΙΣΩ</button>
+          <button id="saveUtilityReadingBtn" class="primary-btn" type="button">ΕΠΙΒΕΒΑΙΩΣΗ</button>
+        </div>
+      </section>
     </div>
   </dialog>
 
