@@ -15,7 +15,7 @@
     path: "/mqtt"
   };
 
-  const APP_VERSION = "2.0";
+  const APP_VERSION = "2.01";
   const AUTO_REFRESH_MS = 60000;
   const OTA_ACK_TIMEOUT_MS = 12000;
   const OTA_POLL_MS = 5000;
@@ -664,9 +664,14 @@
   }
 
   async function loadOtaManifest() {
-    const response = await fetch(OTA_MANIFEST_URL, {
+    const manifestUrl = `${OTA_MANIFEST_URL}?cb=${Date.now()}`;
+    const response = await fetch(manifestUrl, {
       cache: "no-store",
-      headers: { "Accept": "text/plain" }
+      headers: {
+        "Accept": "text/plain",
+        "Cache-Control": "no-cache",
+        "Pragma": "no-cache"
+      }
     });
     if (!response.ok) {
       throw new Error(`OTA manifest HTTP ${response.status}`);
