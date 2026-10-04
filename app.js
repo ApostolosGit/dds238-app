@@ -15,13 +15,13 @@
     path: "/mqtt"
   };
 
-  const APP_VERSION = "2.06";
+  const APP_VERSION = "2.07";
   const AUTO_REFRESH_MS = 60000;
   const OTA_ACK_TIMEOUT_MS = 12000;
   const OTA_POLL_MS = 5000;
   const OTA_TOTAL_TIMEOUT_MS = 300000;
   const OTA_PIN = "12134";
-  const OTA_MANIFEST_URL = "https://raw.githubusercontent.com/ApostolosGit/ESP8266-OTA/main/manifest.txt";
+  const OTA_MANIFEST_BASE_URL = "https://raw.githubusercontent.com/ApostolosGit/ESP8266-OTA/main/";
   const OTA_RAW_BASE_URL = "https://raw.githubusercontent.com/ApostolosGit/ESP8266-OTA/main/";
   const devices = new Map();
   const csvBuffers = new Map();
@@ -706,8 +706,14 @@
     return true;
   }
 
-  async function loadOtaManifest() {
-    const manifestUrl = `${OTA_MANIFEST_URL}?cb=${Date.now()}`;
+  function otaManifestUrlForDevice(device) {
+    const type = meterType(device);
+    const file = type === "DDS" ? "manifest-dds.txt" : "manifest-jsy.txt";
+    return OTA_MANIFEST_BASE_URL + file;
+  }
+
+  async function loadOtaManifest(device) {
+    const manifestUrl = `${otaManifestUrlForDevice(device)}?cb=${Date.now()}`;
     const response = await fetch(manifestUrl, {
       cache: "no-store"
     });
@@ -754,7 +760,7 @@
     renderOtaAvailability(device, null, true);
 
     try {
-      const manifest = await loadOtaManifest();
+      const manifest = await loadOtaManifest(device);
       if (adminTargetId !== id) return;
       renderOtaAvailability(device, manifest, false);
     } catch (_) {
@@ -1043,7 +1049,7 @@
     setAdminStatus("Έλεγχος διαθέσιμου OTA firmware…");
 
     try {
-      const manifest = await loadOtaManifest();
+      const manifest = await loadOtaManifest(device);
 
       if (!otaManifestMatchesDevice(manifest, device)) {
         throw new Error(`Το διαθέσιμο firmware ${manifest.meter || "?"} δεν αντιστοιχεί στη συσκευή.`);
