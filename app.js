@@ -1424,6 +1424,8 @@
       invalid_reading: "Τα στοιχεία της μέτρησης ΔΕΗ δεν είναι έγκυρα.",
       invalid_reading_id: "Η εγγραφή ΔΕΗ δεν είναι έγκυρη.",
       reading_not_found: "Η μέτρηση ΔΕΗ δεν βρέθηκε.",
+      reading_update_not_allowed: "Η εγγραφή δεν επιτρέπει αυτή τη διόρθωση. Για Ε.Κ. διορθώνεται μόνο η τελευταία ενεργή, χωρίς αλλαγή τύπου Ε.Κ./Τ.Κ.",
+      reading_not_found_or_not_latest_ek: "Η εγγραφή δεν βρέθηκε ή δεν είναι η τελευταία ενεργή Ε.Κ. Η διαγραφή Ε.Κ. επιτρέπεται μόνο για την τελευταία.",
       storage_failed: "Απέτυχε η αποθήκευση στο ESP8266.",
       tariff_mode_mismatch: "Η μέτρηση δεν ταιριάζει με τον ενεργό τύπο Ζ / Ζ1-Ζ2.",
       time_not_valid: "Ο ESP δεν έχει ακόμα έγκυρη ημερομηνία/ώρα από NTP.",
@@ -1535,7 +1537,11 @@
             mapped: f[8] === "1",
             anchor: Number(f[9]),
             anchorZ1: Number(f[10]),
-            anchorZ2: Number(f[11])
+            anchorZ2: Number(f[11]),
+            ekFlags: f.length >= 16 ? Number(f[12]) : 0,
+            predictedWh: f.length >= 16 ? Number(f[13]) : NaN,
+            actualWh: f.length >= 16 ? Number(f[14]) : NaN,
+            canDelete: f.length >= 16 ? f[15] === "1" : null
           };
         }
         if (f.length < 7) return null;
@@ -1582,6 +1588,14 @@
   }
 
   function utilityDeviation(previous, row) {
+    // Firmware freezes the same-period comparison before a near-now correction.
+    // It remains valid after restart, later consumption, edits/deletion of other rows.
+    if (row.kind === "ek" && (row.ekFlags & 4)) {
+      if (!(row.ekFlags & 2) || !Number.isFinite(row.predictedWh) ||
+          !Number.isFinite(row.actualWh) || row.actualWh < MIN_DEVIATION_KWH * 1000 ||
+          row.predictedWh < 0) return null;
+      return ((row.predictedWh - row.actualWh) / row.actualWh) * 100;
+    }
     if (!previous || !previous.mapped || !row.mapped || previous.mode !== row.mode) return null;
 
     let realDelta;
@@ -1607,15 +1621,24 @@
     return `${sign}${formatNumber(value, 2)}%`;
   }
 
+  function utilityCanDelete(row) {
+    if (row.kind !== "ek") return true;
+    const latestId = utilityHistoryRows.reduce((max, item) =>
+      item.kind === "ek" ? Math.max(max, item.id) : max, 0);
+    return row.id === latestId && row.canDelete !== false;
+  }
+
   function utilityActionButtons(row, currentMode, firmware) {
-    const canEdit = row.mode === currentMode && firmwareAtLeast(firmware, 3, 4);
+    const canDelete = utilityCanDelete(row);
+    const canEdit = row.mode === currentMode && firmwareAtLeast(firmware, 3, 4) && canDelete;
     return `
       <div class="history-actions">
         <button class="secondary-btn history-btn" type="button"
           data-utility-action="edit" data-utility-id="${row.id}"
           ${canEdit ? "" : "disabled"}>ΔΙΟΡΘΩΣΗ</button>
         <button class="danger-outline-btn history-btn" type="button"
-          data-utility-action="delete" data-utility-id="${row.id}">ΔΙΑΓΡΑΦΗ</button>
+          data-utility-action="delete" data-utility-id="${row.id}"
+          ${canDelete ? "" : 'disabled title="Μόνο η τελευταία ενεργή Ε.Κ. μπορεί να διαγραφεί"'}>ΔΙΑΓΡΑΦΗ</button>
       </div>`;
   }
 
@@ -2093,6 +2116,7 @@
     }
 
     if (button.dataset.utilityAction === "delete") {
+      if (!utilityCanDelete(row)) return;
       const kind = row.kind === "ek" ? "Ε.Κ." : "Τ.Κ.";
       if (!window.confirm(`Να διαγραφεί η ${kind} ${utilityDateTimeLabel(row)};`)) return;
       if (ui.utilityHistoryDialog.open) ui.utilityHistoryDialog.close();
