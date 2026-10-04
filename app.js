@@ -15,7 +15,7 @@
     path: "/mqtt"
   };
 
-  const APP_VERSION = "2.07";
+  const APP_VERSION = "2.08";
   const AUTO_REFRESH_MS = 60000;
   const OTA_ACK_TIMEOUT_MS = 12000;
   const OTA_POLL_MS = 5000;
