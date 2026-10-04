@@ -1424,7 +1424,7 @@
       invalid_reading: "Τα στοιχεία της μέτρησης ΔΕΗ δεν είναι έγκυρα.",
       invalid_reading_id: "Η εγγραφή ΔΕΗ δεν είναι έγκυρη.",
       reading_not_found: "Η μέτρηση ΔΕΗ δεν βρέθηκε.",
-      reading_update_not_allowed: "Η εγγραφή δεν επιτρέπει αυτή τη διόρθωση. Για Ε.Κ. διορθώνεται μόνο η τελευταία ενεργή, χωρίς αλλαγή τύπου Ε.Κ./Τ.Κ.",
+      reading_update_not_allowed: "Η εγγραφή δεν βρέθηκε ή έχει ήδη διαγραφεί και δεν μπορεί να διορθωθεί.",
       reading_not_found_or_not_latest_ek: "Η εγγραφή δεν βρέθηκε ή δεν είναι η τελευταία ενεργή Ε.Κ. Η διαγραφή Ε.Κ. επιτρέπεται μόνο για την τελευταία.",
       storage_failed: "Απέτυχε η αποθήκευση στο ESP8266.",
       tariff_mode_mismatch: "Η μέτρηση δεν ταιριάζει με τον ενεργό τύπο Ζ / Ζ1-Ζ2.",
@@ -1630,7 +1630,7 @@
 
   function utilityActionButtons(row, currentMode, firmware) {
     const canDelete = utilityCanDelete(row);
-    const canEdit = row.mode === currentMode && firmwareAtLeast(firmware, 3, 4) && canDelete;
+    const canEdit = row.mode === currentMode && firmwareAtLeast(firmware, 3, 4);
     return `
       <div class="history-actions">
         <button class="secondary-btn history-btn" type="button"
