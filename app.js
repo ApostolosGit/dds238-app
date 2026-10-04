@@ -2231,7 +2231,7 @@
     });
 
     window.addEventListener("load", () => {
-      navigator.serviceWorker.register("./sw.js", { updateViaCache: "none" })
+      navigator.serviceWorker.register("./sw.js?v=2.0.8-r2", { updateViaCache: "none" })
         .then((registration) => {
           const checkForAppUpdate = () => {
             registration.update().catch((err) => {

@@ -21,17 +21,19 @@
 (async () => {
   try {
     if ("serviceWorker" in navigator) {
-      const regs = await navigator.serviceWorker.getRegistrations();
+      const appScope = new URL("./", location.href).href;
+      const regs = (await navigator.serviceWorker.getRegistrations())
+        .filter((reg) => reg.scope === appScope);
       await Promise.all(regs.map((reg) => reg.unregister()));
     }
     if ("caches" in window) {
-      const keys = await caches.keys();
+      const keys = (await caches.keys()).filter((key) => key.startsWith("energy-dds-jsy-pwa-"));
       await Promise.all(keys.map((key) => caches.delete(key)));
     }
   } catch (err) {
     console.warn("Reset cleanup warning", err);
   }
-  location.replace("./?app=1.8.2&reset=" + Date.now());
+  location.replace("./?app=2.08&reset=" + Date.now());
 })();
 </script>
 </body>
