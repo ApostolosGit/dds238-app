@@ -12,7 +12,7 @@ let installed = [];
 const cache = {
   addAll: async (requests) => { installed = requests; },
   put: async (request, response) => { entries.set(request.url || request, response); },
-  match: async (request) => entries.get(request.url || request)
+  match: async (request) => entries.get(request.url || request)?.clone()
 };
 let offline = false, httpStatus = 200;
 const ctx = vm.createContext({
