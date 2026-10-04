@@ -6,7 +6,7 @@ const swSource = readFileSync(new URL("../sw.js", import.meta.url), "utf8");
 const html = readFileSync(new URL("../index.html", import.meta.url), "utf8");
 const resetHtml = readFileSync(new URL("../reset-app.html", import.meta.url), "utf8");
 const base = "https://example.test/dds238-app/";
-const handlers = new Map(), deleted = [], navigated = [], fetchOptions = [];
+const handlers = new Map(), deleted = [], navigated = [], fetchOptions = [], fetchedUrls = [];
 const entries = new Map();
 let installed = [];
 const cache = {
@@ -36,6 +36,7 @@ const ctx = vm.createContext({
   },
   fetch: async (request, options) => {
     fetchOptions.push(options);
+    fetchedUrls.push(request.url);
     if (offline) throw new Error("offline");
     return new Response("fresh", { status: httpStatus });
   }
@@ -71,7 +72,10 @@ assert.deepEqual(navigated, [base]);
 const asset = html.match(/src="(app\.js[^"]+)"/)[1];
 assert.equal(await (await request(asset)).text(), "fresh");
 assert.equal(fetchOptions.at(-1).cache, "no-store");
+assert.equal(await (await request("app.js?v=2.0.0")).text(), "fresh");
+assert.equal(fetchedUrls.at(-1), base + "app.js?v=2.0.8-r2");
 offline = true;
+assert.equal(await (await request("app.js?v=2.0.0")).text(), "fresh");
 assert.equal(await (await request(asset)).text(), "fresh");
 assert.equal((await request("uncached.js")).type, "error");
 entries.set(base + "index.html", new Response("offline page"));

@@ -51,17 +51,23 @@ self.addEventListener("fetch", (event) => {
   if (event.request.method !== "GET") return;
   const url = new URL(event.request.url);
   if (!url.href.startsWith(APP_SCOPE)) return;
+  let resource = event.request;
+  if (["app.js", "style.css"].some((file) => url.pathname === new URL(file, APP_SCOPE).pathname)) {
+    // Older cached HTML may still request ?v=2.0.0; serve the current asset URL.
+    url.search = "?v=2.0.8-r2";
+    resource = new Request(url.href, { cache: "no-store" });
+  }
   event.respondWith((async () => {
     const cache = await caches.open(CACHE_NAME);
     try {
-      const response = await fetch(event.request, { cache: "no-store" });
+      const response = await fetch(resource, { cache: "no-store" });
       if (response.ok) {
         const copy = response.clone();
-        event.waitUntil(cache.put(event.request, copy).catch(() => null));
+        event.waitUntil(cache.put(resource, copy).catch(() => null));
       }
       return response;
     } catch (_) {
-      const cached = await cache.match(event.request);
+      const cached = await cache.match(resource);
       if (cached) return cached;
       // Offline HTML fallback is for navigations, not for JS/CSS asset requests.
       if (event.request.mode === "navigate") {
