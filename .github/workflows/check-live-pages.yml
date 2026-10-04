@@ -3,26 +3,55 @@ name: Check live Pages version
 on:
   workflow_dispatch:
   push:
-    branches:
-      - main
+    branches: [main]
     paths:
+      - "app.js"
+      - "sw.js"
+      - "index.html"
+      - "reset-app.html"
       - ".github/workflows/check-live-pages.yml"
 
 permissions:
   contents: read
 
+concurrency:
+  group: live-pages-version
+  cancel-in-progress: true
+
 jobs:
   check:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
-      - name: Check live site
+      - uses: actions/checkout@v4
+      - name: Verify published app bytes
         shell: bash
         run: |
           set -euo pipefail
           BASE="https://apostolosgit.github.io/dds238-app"
-          for f in index.html app.js sw.js; do
-            echo "===== $f ====="
-            curl -fsSL -H 'Cache-Control: no-cache' "$BASE/$f?ts=$(date +%s)" -o "/tmp/$f"
-            echo "size=$(stat -c%s "/tmp/$f")"
-            grep -nE 'Energy DDS / JSY v1\.[0-9]+|APP_VERSION|energy-dds-jsy-pwa-v1\.[0-9]+\.[0-9]+' "/tmp/$f" || true
+          mkdir -p live
+          for attempt in $(seq 1 10); do
+            nonce="$(date +%s)-$attempt"
+            ok=1
+            for f in index.html app.js sw.js reset-app.html; do
+              if ! curl -fsSL --connect-timeout 5 --max-time 8 -H 'Cache-Control: no-cache' "$BASE/$f?v=2.0.8-r2&check=$nonce" -o "live/$f"; then
+                ok=0
+                continue
+              fi
+              if ! cmp -s "$f" "live/$f"; then ok=0; fi
+            done
+            if ! curl -fsSL --connect-timeout 5 --max-time 8 -H 'Cache-Control: no-cache' "$BASE/?check=$nonce" -o live/root.html; then ok=0; fi
+            if ! cmp -s index.html live/root.html; then ok=0; fi
+            if [ "$ok" -eq 1 ]; then
+              echo "LIVE_PAGES_MATCH_CHECKOUT=PASS"
+              grep -n 'APP_VERSION =' live/app.js
+              grep -n 'CACHE_NAME =' live/sw.js
+              grep -nE 'MQTT.app. v|app.js.v=' live/index.html
+              sha256sum live/index.html live/app.js live/sw.js live/reset-app.html
+              exit 0
+            fi
+            echo "Waiting for current Pages deployment ($attempt/10)"
+            if [ "$attempt" -lt 10 ]; then sleep 10; fi
           done
+          echo "Live Pages files did not match the requested release"
+          exit 1

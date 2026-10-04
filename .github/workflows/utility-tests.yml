@@ -3,12 +3,18 @@ on:
   pull_request:
     paths:
       - "app.js"
+      - "sw.js"
+      - "index.html"
+      - "reset-app.html"
       - "tests/**"
       - ".github/workflows/utility-tests.yml"
   push:
     branches: [main]
     paths:
       - "app.js"
+      - "sw.js"
+      - "index.html"
+      - "reset-app.html"
       - "tests/**"
       - ".github/workflows/utility-tests.yml"
 permissions:
@@ -22,4 +28,6 @@ jobs:
         with:
           node-version: "22"
       - run: node --check app.js
+      - run: node --check sw.js
+      - run: node tests/test_pwa_cache.mjs
       - run: node tests/test_utility_ek.mjs

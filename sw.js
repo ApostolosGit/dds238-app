@@ -1,66 +1,74 @@
-const CACHE_NAME = "energy-dds-jsy-pwa-v2.0.8";
+const CACHE_NAME = "energy-dds-jsy-pwa-v2.0.8-r2";
+const CACHE_PREFIX = "energy-dds-jsy-pwa-";
+const APP_SCOPE = new URL("./", self.location.href).href;
 const APP_SHELL = [
   "./",
   "./index.html",
-  "./style.css",
-  "./app.js",
+  "./style.css?v=2.0.8-r2",
+  "./app.js?v=2.0.8-r2",
   "./manifest.webmanifest",
   "./icon-192.png",
   "./icon-512.png"
 ];
 
 self.addEventListener("install", (event) => {
-  event.waitUntil(caches.open(CACHE_NAME).then((cache) => cache.addAll(APP_SHELL)));
-  self.skipWaiting();
+  event.waitUntil((async () => {
+    const cache = await caches.open(CACHE_NAME);
+    // The new cache must download fresh bytes rather than reuse the HTTP cache.
+    await cache.addAll(APP_SHELL.map((path) =>
+      new Request(new URL(path, APP_SCOPE).href, { cache: "no-store" })
+    ));
+    await self.skipWaiting();
+  })());
 });
 
 self.addEventListener("activate", (event) => {
   event.waitUntil((async () => {
     const keys = await caches.keys();
-    const hadOldAppCache = keys.some(
-      (key) => key.startsWith("energy-dds-jsy-pwa-") && key !== CACHE_NAME
+    const oldAppKeys = keys.filter(
+      (key) => key.startsWith(CACHE_PREFIX) && key !== CACHE_NAME
     );
-
-    await Promise.all(
-      keys.filter((key) => key !== CACHE_NAME).map((key) => caches.delete(key))
-    );
-
+    await Promise.all(oldAppKeys.map((key) => caches.delete(key)));
     await self.clients.claim();
-
-    // Όταν ενεργοποιείται νέα έκδοση πάνω από παλιό PWA,
-    // ανανεώνουμε αυτόματα τα ανοιχτά παράθυρα ώστε να μη μένουν σε παλιό app.js.
-    if (hadOldAppCache) {
+    if (oldAppKeys.length) {
       const windows = await self.clients.matchAll({
         type: "window",
         includeUncontrolled: true
       });
-
       await Promise.all(
-        windows.map((client) => client.navigate(client.url).catch(() => null))
+        windows.filter((client) => client.url.startsWith(APP_SCOPE))
+          .map((client) => client.navigate(client.url).catch(() => null))
       );
     }
   })());
 });
 
 self.addEventListener("message", (event) => {
-  if (event.data && event.data.type === "SKIP_WAITING") {
-    self.skipWaiting();
-  }
+  if (event.data && event.data.type === "SKIP_WAITING") self.skipWaiting();
 });
 
 self.addEventListener("fetch", (event) => {
   if (event.request.method !== "GET") return;
-
   const url = new URL(event.request.url);
-  if (url.origin !== self.location.origin) return;
-
-  event.respondWith(
-    fetch(event.request)
-      .then((response) => {
+  if (!url.href.startsWith(APP_SCOPE)) return;
+  event.respondWith((async () => {
+    const cache = await caches.open(CACHE_NAME);
+    try {
+      const response = await fetch(event.request, { cache: "no-store" });
+      if (response.ok) {
         const copy = response.clone();
-        caches.open(CACHE_NAME).then((cache) => cache.put(event.request, copy));
-        return response;
-      })
-      .catch(() => caches.match(event.request).then((cached) => cached || caches.match("./index.html")))
-  );
+        event.waitUntil(cache.put(event.request, copy).catch(() => null));
+      }
+      return response;
+    } catch (_) {
+      const cached = await cache.match(event.request);
+      if (cached) return cached;
+      // Offline HTML fallback is for navigations, not for JS/CSS asset requests.
+      if (event.request.mode === "navigate") {
+        const page = await cache.match(new URL("./index.html", APP_SCOPE).href);
+        if (page) return page;
+      }
+      return Response.error();
+    }
+  })());
 });
