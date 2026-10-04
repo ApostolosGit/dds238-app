@@ -1,0 +1,25 @@
+name: Utility reading checks
+on:
+  pull_request:
+    paths:
+      - "app.js"
+      - "tests/**"
+      - ".github/workflows/utility-tests.yml"
+  push:
+    branches: [main]
+    paths:
+      - "app.js"
+      - "tests/**"
+      - ".github/workflows/utility-tests.yml"
+permissions:
+  contents: read
+jobs:
+  utility:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - run: node --check app.js
+      - run: node tests/test_utility_ek.mjs
