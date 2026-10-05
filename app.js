@@ -15,7 +15,7 @@
     path: "/mqtt"
   };
 
-  const APP_VERSION = "2.09";
+  const APP_VERSION = "2.10";
   const AUTO_REFRESH_MS = 60000;
   const OTA_ACK_TIMEOUT_MS = 12000;
   const OTA_POLL_MS = 5000;
@@ -375,8 +375,8 @@
       const z2Ref = hasUtility ? rowValue(state.z2_ref) : null;
       const z1Now = estimateValid ? rowValue(state.z1_now) : null;
       const z2Now = estimateValid ? rowValue(state.z2_now) : null;
-      const z1Diff = estimateValid ? rowValue(state.z1_diff) : null;
-      const z2Diff = estimateValid ? rowValue(state.z2_diff) : null;
+      const z1Diff = hasUtility && estimateValid ? rowValue(state.z1_diff) : null;
+      const z2Diff = hasUtility && estimateValid ? rowValue(state.z2_diff) : null;
 
       return `
         <section class="tariff-dashboard">
@@ -398,17 +398,17 @@
               ${tariffRow("Τελευταία ΔΕΗ", z2Ref, "kWh")}
             </article>
           </div>
-          ${hasUtility
-            ? (!estimateValid
-                ? '<div class="tariff-meta">Η τελευταία μέτρηση ΔΕΗ αποθηκεύτηκε, αλλά δεν υπάρχει αρκετό εσωτερικό ιστορικό για εκτίμηση τώρα.</div>'
-                : "")
-            : '<div class="tariff-meta">Καταχώρησε την πρώτη επίσημη μέτρηση ΔΕΗ από τις Ρυθμίσεις.</div>'}
+          ${!estimateValid
+            ? '<div class="tariff-meta">Δεν υπάρχει ακόμη Καταχώρηση Ένδειξης Μετρητή ΔΕΗ για να ξεκινήσει η Εκτίμηση τώρα.</div>'
+            : (!hasUtility
+                ? '<div class="tariff-meta">Η Εκτίμηση τώρα είναι ενεργή. Καταχώρησε Μέτρηση ΔΕΗ για να εμφανιστεί η Διαφορά.</div>'
+                : "")}
         </section>`;
     }
 
     const zRef = hasUtility ? rowValue(state.z_ref) : null;
     const zNow = estimateValid ? rowValue(state.z_now) : null;
-    const zDiff = estimateValid ? rowValue(state.z_diff) : null;
+    const zDiff = hasUtility && estimateValid ? rowValue(state.z_diff) : null;
 
     return `
       <section class="tariff-dashboard single-zone-dashboard">
@@ -424,11 +424,11 @@
             ${tariffRow("Τελευταία ΔΕΗ", zRef, "kWh")}
           </article>
         </div>
-        ${hasUtility
-          ? (!estimateValid
-              ? '<div class="tariff-meta">Η τελευταία μέτρηση ΔΕΗ αποθηκεύτηκε, αλλά δεν υπάρχει αρκετό εσωτερικό ιστορικό για εκτίμηση τώρα.</div>'
-              : "")
-          : '<div class="tariff-meta">Καταχώρησε την πρώτη επίσημη μέτρηση ΔΕΗ από τις Ρυθμίσεις.</div>'}
+        ${!estimateValid
+          ? '<div class="tariff-meta">Δεν υπάρχει ακόμη Καταχώρηση Ένδειξης Μετρητή ΔΕΗ για να ξεκινήσει η Εκτίμηση τώρα.</div>'
+          : (!hasUtility
+              ? '<div class="tariff-meta">Η Εκτίμηση τώρα είναι ενεργή. Καταχώρησε Μέτρηση ΔΕΗ για να εμφανιστεί η Διαφορά.</div>'
+              : "")}
       </section>`;
   }
 
@@ -442,7 +442,7 @@
     const estimateValid = s.estimate_valid === true;
     const zRef = hasUtility ? s.z_ref : null;
     const zNow = estimateValid ? s.z_now : null;
-    const zDiff = estimateValid ? s.z_diff : null;
+    const zDiff = hasUtility && estimateValid ? s.z_diff : null;
 
     const singleZoneMeter = dual ? "" : `
       <div class="dds-inline-column dds-meter-column">
@@ -450,7 +450,7 @@
         ${tariffRow("Διαφορά", zDiff, "kWh", diffTone(zDiff))}
         ${tariffRow("Εκτίμηση τώρα", zNow, "kWh")}
         ${tariffRow("Τελευταία ΔΕΗ", zRef, "kWh")}
-        ${!hasUtility ? '<div class="tariff-meta">Καταχώρησε πρώτη μέτρηση ΔΕΗ.</div>' : ""}
+        ${!estimateValid ? '<div class="tariff-meta">Καταχώρησε Ένδειξη Μετρητή ΔΕΗ για Εκτίμηση τώρα.</div>' : (!hasUtility ? '<div class="tariff-meta">Καταχώρησε Μέτρηση ΔΕΗ για τη Διαφορά.</div>' : "")}
       </div>`;
 
     return `
@@ -1124,8 +1124,8 @@
     editingUtilityId = null;
     utilityEntryStep = 0;
     ui.utilityEntryTitle.textContent = "Νέα καταχώρηση";
-    ui.utilityKindFinal.checked = true;
-    ui.utilityKindIntermediate.checked = false;
+    ui.utilityKindFinal.checked = false;
+    ui.utilityKindIntermediate.checked = true;
     ui.utilityKindFinal.disabled = false;
     ui.utilityKindIntermediate.disabled = false;
     ui.utilityTimeExact.checked = false;
@@ -1182,8 +1182,8 @@
     const device = devices.get(adminTargetId);
     if (!device) return;
 
-    if (!firmwareAtLeast((device.state || {}).firmware, 3, 4)) {
-      setAdminStatus("Οι καταχωρήσεις Τ.Κ./Ε.Κ. απαιτούν firmware v3.04+.", "error");
+    if (!firmwareAtLeast((device.state || {}).firmware, 4, 0)) {
+      setAdminStatus("Οι νέες Καταχωρήσεις Ένδειξης / Μέτρησης ΔΕΗ απαιτούν firmware v4.00+.", "error");
       return;
     }
 
@@ -1266,8 +1266,8 @@
     const form = readUtilityForm();
     if (!form) return false;
     const kindLabel = form.kind === "ek"
-      ? "Ε.Κ. — Ενδιάμεση Καταχώρηση"
-      : "Τ.Κ. — Τελική Καταχώρηση";
+      ? "Καταχώρηση Ένδειξης Μετρητή ΔΕΗ"
+      : "Καταχώρηση Μέτρησης ΔΕΗ";
 
     const values = form.dual
       ? `<div class="utility-confirm-values"><strong>Ζ1: ${formatNumber(form.z1, 2)} kWh</strong><strong>Ζ2: ${formatNumber(form.z2, 2)} kWh</strong></div>`
@@ -1278,8 +1278,8 @@
       <div>Τιμολόγιο: <b>${form.dual ? "Διζωνικό Ζ1 / Ζ2" : "Μονοζωνικό Ζ"}</b></div>
       <div>Τύπος: <b>${kindLabel}</b></div>
       ${form.automaticTime
-        ? '<div>Ημερομηνία / ώρα: <b>τρέχουσα, από τον ESP κατά την αποθήκευση</b></div><div>Σύνδεση με τους τρέχοντες εσωτερικούς μετρητές.</div>'
-        : `<div>Ημερομηνία: <b>${escapeHtml(form.date)}</b></div><div>Ώρα: <b>${form.time === "window" ? "Κατ’εκτίμηση · 08:00–18:00" : escapeHtml(form.time)}</b></div>`}
+        ? '<div>Ημερομηνία / ώρα: <b>τρέχουσα, από τον ESP κατά την αποθήκευση</b></div><div>Η ένδειξη συνδέεται με τους εσωτερικούς μετρητές της ίδιας στιγμής και χρησιμοποιείται για Εκτίμηση τώρα / αξιολόγηση %.</div>'
+        : `<div>Ημερομηνία μέτρησης ΔΕΗ: <b>${escapeHtml(form.date)}</b></div><div>Ώρα: <b>${form.time === "window" ? "δεν είναι γνωστή" : escapeHtml(form.time)}</b></div><div>Η μέτρηση χρησιμοποιείται μόνο ως «ΔΕΗ τελευταία» για τη ζωντανή Διαφορά.</div>`}
     `;
     return true;
   }
@@ -1300,12 +1300,12 @@
     const fw = String((device.state || {}).firmware || "?");
     renderOtaAvailability(device, null, true);
 
-    const supportsEntryTypes = firmwareAtLeast(fw, 3, 4);
+    const supportsEntryTypes = firmwareAtLeast(fw, 4, 0);
     setAdminStatus(
       supportsEntryTypes
         ? "Έτοιμο."
         : (firmwareAtLeast(fw, 3, 0)
-            ? "Οι καταχωρήσεις Τ.Κ./Ε.Κ. απαιτούν firmware v3.04+."
+            ? "Οι νέες Καταχωρήσεις Ένδειξης / Μέτρησης ΔΕΗ απαιτούν firmware v4.00+."
             : "Οι μετρήσεις απαιτούν firmware v3.00+."),
       supportsEntryTypes ? "ok" : "error"
     );
@@ -1334,7 +1334,7 @@
     const device = adminTargetId ? devices.get(adminTargetId) : null;
     const state = device ? (device.state || {}) : {};
     const supportsV3 = Boolean(device && firmwareAtLeast(state.firmware, 3, 0));
-    const supportsTypes = Boolean(device && firmwareAtLeast(state.firmware, 3, 4));
+    const supportsTypes = Boolean(device && firmwareAtLeast(state.firmware, 4, 0));
 
     if (ui.utilityHistoryBtn) {
       ui.utilityHistoryBtn.disabled = !adminTargetId || busy || !connected || !supportsV3;
@@ -1383,8 +1383,8 @@
     const dual = utilityCurrentDual();
     const kind = utilityKindValue();
     const automaticTime = kind === "ek" && editingUtilityId === null;
-    if (automaticTime && !firmwareAtLeast(device.state.firmware, 3, 15)) {
-      setAdminStatus("Η αυτόματη Ε.Κ. με καθαρό ισοζύγιο απαιτεί firmware v3.15+.", "error");
+    if (automaticTime && !firmwareAtLeast(device.state.firmware, 4, 0)) {
+      setAdminStatus("Η Καταχώρηση Ένδειξης Μετρητή ΔΕΗ απαιτεί firmware v4.00+.", "error");
       return null;
     }
     const date = automaticTime ? "now" : ui.utilityDateInput.value.trim();
@@ -1439,9 +1439,12 @@
   }
 
   function utilitySaveMessage(data) {
-    const kind = data && data.kind === "ek" ? "Ε.Κ." : "Τ.Κ.";
-    if (!data || data.mapped !== true) {
-      return `Η ${kind} αποθηκεύτηκε. Δεν υπάρχει αρκετό εσωτερικό ιστορικό για υπολογισμό απόκλισης.`;
+    const indication = data && data.kind === "ek";
+    const kind = indication
+      ? "Καταχώρηση Ένδειξης Μετρητή ΔΕΗ"
+      : "Καταχώρηση Μέτρησης ΔΕΗ";
+    if (indication && (!data || data.mapped !== true)) {
+      return `Η ${kind} δεν συνδέθηκε με τους εσωτερικούς μετρητές.`;
     }
     return `Η ${kind} αποθηκεύτηκε.`;
   }
@@ -1467,7 +1470,8 @@
       invalid_reading_id: "Η εγγραφή ΔΕΗ δεν είναι έγκυρη.",
       reading_not_found: "Η μέτρηση ΔΕΗ δεν βρέθηκε.",
       reading_update_not_allowed: "Η εγγραφή δεν βρέθηκε ή έχει ήδη διαγραφεί και δεν μπορεί να διορθωθεί.",
-      reading_not_found_or_not_latest_ek: "Η εγγραφή δεν βρέθηκε ή δεν είναι η τελευταία ενεργή Ε.Κ. Η διαγραφή Ε.Κ. επιτρέπεται μόνο για την τελευταία.",
+      reading_not_found_or_not_latest_ek: "Η εγγραφή δεν βρέθηκε ή δεν είναι η τελευταία ενεργή Καταχώρηση Ένδειξης. Μόνο η τελευταία Ένδειξη μπορεί να διαγραφεί.",
+      indication_anchor_failed: "Η Ένδειξη ΔΕΗ δεν μπόρεσε να συνδεθεί με φρέσκια εσωτερική μέτρηση του ESP.",
       storage_failed: "Απέτυχε η αποθήκευση στο ESP8266.",
       tariff_mode_mismatch: "Η μέτρηση δεν ταιριάζει με τον ενεργό τύπο Ζ / Ζ1-Ζ2.",
       time_not_valid: "Ο ESP δεν έχει ακόμα έγκυρη ημερομηνία/ώρα από NTP.",
@@ -1636,13 +1640,16 @@
   }
 
   function utilityKindBadge(row) {
-    const isEk = row.kind === "ek";
-    return `<span class="reading-kind ${isEk ? "kind-ek" : "kind-tk"}" title="${isEk ? "Ενδιάμεση Καταχώρηση" : "Τελική Καταχώρηση"}">${isEk ? "Ε.Κ." : "Τ.Κ."}</span>`;
+    const isIndication = row.kind === "ek";
+    return `<span class="reading-kind ${isIndication ? "kind-ek" : "kind-tk"}" title="${isIndication ? "Καταχώρηση Ένδειξης Μετρητή ΔΕΗ" : "Καταχώρηση Μέτρησης ΔΕΗ"}">${isIndication ? "ΕΝΔ." : "ΜΕΤ."}</span>`;
   }
 
   function utilityDeviationResult(previous, row) {
     let actualKwh = null, espKwh = null;
     const unavailable = (reason) => ({ value: null, actualKwh, espKwh, reason });
+    if (!row || row.kind !== "ek") {
+      return unavailable("Η Μέτρηση ΔΕΗ χρησιμοποιείται μόνο για τη Διαφορά με την Εκτίμηση τώρα");
+    }
     const calculate = () => {
       if (!Number.isFinite(actualKwh) || !Number.isFinite(espKwh)) return unavailable("Χωρίς πλήρη σύγκριση εισαγωγής / εξαγωγής");
       if (actualKwh === 0) return unavailable("Μηδενικό καθαρό ισοζύγιο ΔΕΗ");
@@ -1716,7 +1723,7 @@
 
   function utilityActionButtons(row, currentMode, firmware) {
     const canDelete = utilityCanDelete(row);
-    const canEdit = row.mode === currentMode && firmwareAtLeast(firmware, 3, 4);
+    const canEdit = row.mode === currentMode && firmwareAtLeast(firmware, 4, 0);
     return `
       <div class="history-actions">
         <button class="secondary-btn history-btn" type="button"
@@ -1724,7 +1731,7 @@
           ${canEdit ? "" : "disabled"}>ΔΙΟΡΘΩΣΗ</button>
         <button class="danger-outline-btn history-btn" type="button"
           data-utility-action="delete" data-utility-id="${row.id}"
-          ${canDelete ? "" : 'disabled title="Μόνο η τελευταία ενεργή Ε.Κ. μπορεί να διαγραφεί"'}>ΔΙΑΓΡΑΦΗ</button>
+          ${canDelete ? "" : 'disabled title="Μόνο η τελευταία ενεργή Καταχώρηση Ένδειξης μπορεί να διαγραφεί"'}>ΔΙΑΓΡΑΦΗ</button>
       </div>`;
   }
 
@@ -1773,9 +1780,11 @@
     const sections = [];
 
     if (monoRows.length) {
-      let previous = null;
+      let previousIndication = null;
+      let previousMeasurement = null;
       const body = monoRows.map((row) => {
-        const diff = previous ? row.z - previous.z : null;
+        const sameKindPrevious = row.kind === "ek" ? previousIndication : previousMeasurement;
+        const diff = sameKindPrevious ? row.z - sameKindPrevious.z : null;
         const html = `
           <tr>
             <td>${escapeHtml(utilityDateTimeLabel(row))}${utilityPointLabel(row)}</td>
@@ -1783,10 +1792,11 @@
             <td><b>${diff === null ? "—" : formatNumber(diff, 2)}</b></td>
             <td>${formatNumber(row.z, 2)}</td>
             ${utilityInternalCounterCell(row, "z")}
-            ${utilityDeviationCell(previous, row)}
+            ${utilityDeviationCell(previousIndication, row)}
             <td>${utilityActionButtons(row, currentMode, firmware)}</td>
           </tr>`;
-        previous = row;
+        if (row.kind === "ek") previousIndication = row;
+        else previousMeasurement = row;
         return html;
       }).join("");
 
@@ -1801,11 +1811,13 @@
     }
 
     if (dualRows.length) {
-      let previous = null;
+      let previousIndication = null;
+      let previousMeasurement = null;
       const body = dualRows.map((row) => {
-        const dz1 = previous ? row.z1 - previous.z1 : null;
-        const dz2 = previous ? row.z2 - previous.z2 : null;
-        const total = previous ? dz1 + dz2 : null;
+        const sameKindPrevious = row.kind === "ek" ? previousIndication : previousMeasurement;
+        const dz1 = sameKindPrevious ? row.z1 - sameKindPrevious.z1 : null;
+        const dz2 = sameKindPrevious ? row.z2 - sameKindPrevious.z2 : null;
+        const total = sameKindPrevious ? dz1 + dz2 : null;
         const html = `
           <tr>
             <td>${escapeHtml(utilityDateTimeLabel(row))}${utilityPointLabel(row)}</td>
@@ -1817,10 +1829,11 @@
             <td>${formatNumber(row.z2, 2)}</td>
             ${utilityInternalCounterCell(row, "z2")}
             <td><b>${total === null ? "—" : formatNumber(total, 2)}</b></td>
-            ${utilityDeviationCell(previous, row)}
+            ${utilityDeviationCell(previousIndication, row)}
             <td>${utilityActionButtons(row, currentMode, firmware)}</td>
           </tr>`;
-        previous = row;
+        if (row.kind === "ek") previousIndication = row;
+        else previousMeasurement = row;
         return html;
       }).join("");
 
@@ -1837,8 +1850,8 @@
     }
 
     if (sections.length) {
-      sections.unshift('<p class="history-note">Χρονική σειρά: παλαιότερη → νεότερη. Ι = εισαγωγή, Ε = εξαγωγή. Δίπλα σε κάθε Ζ/Ζ1/Ζ2 εμφανίζεται ο εσωτερικός ESP (Ι−Ε) της αντίστοιχης στιγμής. Οι απόλυτες τιμές ESP έχουν δική τους αρχή· συγκρίνουμε τις μεταβολές τους.</p>');
-      sections.push(`<p class="history-note">Σφάλμα % = 100 × (ισοζύγιο ESP − ισοζύγιο ΔΕΗ) / |ισοζύγιο ΔΕΗ|, για την ίδια περίοδο. Αρνητικό ισοζύγιο επιτρέπεται με Φ/Β. Η Ε.Κ. διατηρεί τη σύγκριση πριν τη διόρθωση. Για |ισοζύγιο ΔΕΗ| κάτω από ${formatNumber(MIN_DEVIATION_KWH, 1)} kWh ή ελλιπή στοιχεία εμφανίζεται — με την αιτία.</p>`);
+      sections.unshift('<p class="history-note">Χρονική σειρά: παλαιότερη → νεότερη. Οι Καταχωρήσεις Ένδειξης συνδέονται με τους εσωτερικούς ESP της ίδιας στιγμής. Οι Καταχωρήσεις Μέτρησης ΔΕΗ μένουν στο ιστορικό και χρησιμοποιούνται μόνο για «ΔΕΗ τελευταία» / Διαφορά.</p>');
+      sections.push(`<p class="history-note">Το Σφάλμα % υπολογίζεται μόνο μεταξύ Καταχωρήσεων Ένδειξης: 100 × (ισοζύγιο ESP − ισοζύγιο ΔΕΗ) / |ισοζύγιο ΔΕΗ|. Αρνητικό ισοζύγιο επιτρέπεται με Φ/Β. Για |ισοζύγιο ΔΕΗ| κάτω από ${formatNumber(MIN_DEVIATION_KWH, 1)} kWh ή ελλιπή στοιχεία εμφανίζεται — με την αιτία.</p>`);
     }
 
     ui.utilityHistoryTitle.textContent = `Πίνακας μετρήσεων · ${id}`;
@@ -2176,7 +2189,7 @@
     const command = editingUtilityId
       ? `utility_reading_update|${editingUtilityId}|${form.commandTail}`
       : `utility_reading_add|${form.commandTail}`;
-    const label = form.kind === "ek" ? "Ε.Κ." : "Τ.Κ.";
+    const label = form.kind === "ek" ? "Ένδειξης ΔΕΗ" : "Μέτρησης ΔΕΗ";
 
     sendAdmin(
       command,
@@ -2210,7 +2223,7 @@
 
     if (button.dataset.utilityAction === "delete") {
       if (!utilityCanDelete(row)) return;
-      const kind = row.kind === "ek" ? "Ε.Κ." : "Τ.Κ.";
+      const kind = row.kind === "ek" ? "Καταχώρηση Ένδειξης ΔΕΗ" : "Καταχώρηση Μέτρησης ΔΕΗ";
       if (!window.confirm(`Να διαγραφεί η ${kind} ${utilityDateTimeLabel(row)};`)) return;
       if (ui.utilityHistoryDialog.open) ui.utilityHistoryDialog.close();
       sendAdmin(
@@ -2324,7 +2337,7 @@
     });
 
     window.addEventListener("load", () => {
-      navigator.serviceWorker.register("./sw.js?v=2.0.9", { updateViaCache: "none" })
+      navigator.serviceWorker.register("./sw.js?v=2.0.10", { updateViaCache: "none" })
         .then((registration) => {
           const checkForAppUpdate = () => {
             registration.update().catch((err) => {
