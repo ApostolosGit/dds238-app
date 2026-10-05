@@ -9,7 +9,7 @@
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="icon" href="icon-192.png" sizes="192x192">
   <link rel="apple-touch-icon" href="icon-192.png">
-  <link rel="stylesheet" href="style.css?v=2.0.9">
+  <link rel="stylesheet" href="style.css?v=2.0.10">
 </head>
 <body>
   <div class="app-shell">
@@ -56,7 +56,7 @@
     </main>
 
     <footer>
-      <span>MQTT.app. v2.09</span>
+      <span>MQTT.app. v2.10</span>
       <span>Auto discovery · MQTT wildcard · refresh 60″</span>
     </footer>
   </div>
@@ -149,7 +149,7 @@
         <div>
           <p class="eyebrow">ΚΑΤΑΧΩΡΗΣΗ ΜΕΤΡΗΣΗΣ</p>
           <h2 id="utilityEntryTitle">Νέα καταχώρηση</h2>
-          <p id="utilityStepLabel" class="utility-step-label">Βήμα 1 από 5</p>
+          <p id="utilityStepLabel" class="utility-step-label">Βήμα 1 από 3</p>
         </div>
         <button id="closeUtilityEntryBtn" class="icon-btn light" type="button" aria-label="Κλείσιμο">×</button>
       </div>
@@ -158,14 +158,14 @@
         <h3>Τύπος καταχώρησης</h3>
         <div class="utility-kind-grid">
           <label class="utility-kind-card">
-            <input id="utilityKindFinal" type="radio" name="utilityKind" value="tk" checked>
-            <span><b>Τ.Κ.</b> Τελική Καταχώρηση</span>
-            <small>Επίσημη μέτρηση ΔΕΗ. Χρησιμοποιείται ως επίσημη βάση.</small>
+            <input id="utilityKindIntermediate" type="radio" name="utilityKind" value="ek" checked>
+            <span><b>Καταχώρηση Ένδειξης Μετρητή ΔΕΗ</b></span>
+            <small>Γίνεται τώρα. Ο ESP βάζει αυτόματα τρέχουσα ημέρα/ώρα και αποθηκεύει μαζί τους εσωτερικούς μετρητές της ίδιας στιγμής για Εκτίμηση τώρα και αξιολόγηση %.</small>
           </label>
           <label class="utility-kind-card">
-            <input id="utilityKindIntermediate" type="radio" name="utilityKind" value="ek">
-            <span><b>Ε.Κ.</b> Ενδιάμεση Καταχώρηση</span>
-            <small>Τρέχουσα μέτρηση. Η ώρα και η σύνδεση με τους μετρητές ESP ορίζονται αυτόματα.</small>
+            <input id="utilityKindFinal" type="radio" name="utilityKind" value="tk">
+            <span><b>Καταχώρηση Μέτρησης ΔΕΗ</b></span>
+            <small>Παλαιότερη μέτρηση που γνωστοποιήθηκε από τη ΔΕΗ αργότερα. Χρησιμοποιείται μόνο ως «ΔΕΗ τελευταία» για τη Διαφορά με την Εκτίμηση τώρα.</small>
           </label>
         </div>
         <div class="dialog-actions">
@@ -186,24 +186,24 @@
       </section>
 
       <section id="utilityStepTime" class="utility-step hidden">
-        <h3>Ώρα Τ.Κ.</h3>
+        <h3>Ώρα Μέτρησης ΔΕΗ</h3>
         <div class="utility-kind-grid">
           <label class="utility-kind-card">
             <input id="utilityTimeExact" type="radio" name="utilityTimeMode" value="exact">
             <span><b>Συγκεκριμένη ώρα</b></span>
-            <small>Αν γνωρίζεις την ώρα που λήφθηκε η ένδειξη.</small>
+            <small>Αν γνωρίζεις την ώρα που η ΔΕΗ πραγματοποίησε τη μέτρηση.</small>
           </label>
           <label class="utility-kind-card">
             <input id="utilityTimeEstimated" type="radio" name="utilityTimeMode" value="window" checked>
-            <span><b>Κατ’ εκτίμηση</b></span>
-            <small>Μέση ένδειξη ESP από 08:00 έως 18:00 της συγκεκριμένης ημέρας.</small>
+            <span><b>Άγνωστη ώρα</b></span>
+            <small>Κρατάμε την ημερομηνία της μέτρησης χωρίς να τη συνδέουμε με παλιούς εσωτερικούς μετρητές ESP.</small>
           </label>
         </div>
         <label id="utilityTimeField" class="hidden">
           Ώρα μέτρησης
           <input id="utilityTimeInput" type="time" disabled>
         </label>
-        <p class="admin-help">Η ημέρα της Τ.Κ. είναι γνωστή. Αν η ώρα δεν είναι γνωστή, επίλεξε «Κατ’ εκτίμηση».</p>
+        <p class="admin-help">Η Μέτρηση ΔΕΗ είναι τιμή αναφοράς που σου γνωστοποιείται αργότερα. Αν δεν ξέρεις την ώρα που έγινε, επίλεξε «Άγνωστη ώρα».</p>
         <div class="dialog-actions">
           <button class="secondary-btn" type="button" data-entry-action="back">ΠΙΣΩ</button>
           <button class="primary-btn" type="button" data-entry-action="next">ΣΥΝΕΧΕΙΑ</button>
@@ -211,7 +211,7 @@
       </section>
 
       <section id="utilityStepReading" class="utility-step hidden">
-        <h3>Ένδειξη μετρητή</h3>
+        <h3>Τιμή μετρητή ΔΕΗ</h3>
         <div id="monoReadingFields">
           <label>
             Ένδειξη Ζ (kWh)
@@ -327,6 +327,6 @@
   <div id="toast" class="toast hidden" role="status" aria-live="polite"></div>
 
   <script src="https://unpkg.com/mqtt@5.15.2/dist/mqtt.min.js"></script>
-  <script src="app.js?v=2.0.9"></script>
+  <script src="app.js?v=2.0.10"></script>
 </body>
 </html>

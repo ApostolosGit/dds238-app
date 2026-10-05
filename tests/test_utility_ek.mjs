@@ -33,7 +33,7 @@ const ui = Object.fromEntries(uiNames.map(name => [name, control()]));
 for (const name of uiNames) assert(html.includes(`id="${name}"`), `Real HTML control ${name}`);
 const ctx = vm.createContext({ utilityHistoryRows: [], adminTargetId: 'test',
   editingUtilityId: null, utilityEntryStep: 0,
-  devices: new Map([['test', { state: { dual_zone: true, firmware: '3.15' } }]]), ui,
+  devices: new Map([['test', { state: { dual_zone: true, firmware: '4.00' } }]]), ui,
   showToast(message) { ctx.lastMessage = message; },
   setAdminStatus(message) { ctx.lastMessage = message; } });
 vm.runInContext(minimumDeclaration + '\n' + [
@@ -63,7 +63,8 @@ assert.equal(rows.map(row => row.id).join(','), '1,2');
 near(rows[1].z1 - rows[0].z1, -6.3); near(rows[1].z2 - rows[0].z2, -23.6);
 assert.equal(rows[1].netSnapshot, true); assert.equal(rows[1].sampleEpoch, endEpoch);
 assert.equal(call('utilityDeviation', rows[0], rows[1]), 0);
-const raw = call('utilityDeviationResult', rows[0], { ...rows[1], netSnapshot: false });
+const previousIndication = { ...rows[0], kind: 'ek' };
+const raw = call('utilityDeviationResult', previousIndication, { ...rows[1], netSnapshot: false });
 near(raw.actualKwh, -29.9); near(raw.espKwh, -29.9); near(raw.value, 0);
 assert.equal(call('utilityDeviation', null, rows[1]), 0);
 assert.equal(call('utilityDeviation', { z: 999 }, rows[1]), 0);
@@ -77,11 +78,14 @@ assert.equal(call('utilityDeviation', null, { ...rows[1], actualWh: 0 }), null);
 assert.equal(call('utilityDeviation', null, { ...rows[1], predictedWh: NaN }), null);
 assert.match(call('utilityDeviationResult', null, { ...rows[1], ekFlags: 5 }).reason, /Δεν υπάρχει πλήρης βάση/);
 assert.match(call('utilityDeviationResult', null, { ...rows[1], ekFlags: 13 }).reason, /Μηδενικό/);
-assert.match(call('utilityDeviationResult', rows[0], { ...rows[1], netSnapshot: false, generation: 2 }).reason, /Διακοπή συνέχειας/);
-assert.equal(call('utilityDeviation', rows[0], { ...rows[1], netSnapshot: false, pointEpoch: startEpoch - 1 }), null);
-assert.equal(call('utilityDeviation', rows[0], { ...rows[1], netSnapshot: false, z1Import: 59 }), null);
-assert.equal(call('utilityDeviation', rows[0], { ...rows[1], netSnapshot: false, z2Export: NaN }), null);
-assert.equal(call('utilityDeviation', { ...rows[0], mode: 'mono' }, { ...rows[1], netSnapshot: false }), null);
+assert.match(call('utilityDeviationResult', previousIndication, { ...rows[1], netSnapshot: false, generation: 2 }).reason, /Διακοπή συνέχειας/);
+assert.equal(call('utilityDeviation', previousIndication, { ...rows[1], netSnapshot: false, pointEpoch: startEpoch - 1 }), null);
+assert.equal(call('utilityDeviation', previousIndication, { ...rows[1], netSnapshot: false, z1Import: 59 }), null);
+assert.equal(call('utilityDeviation', previousIndication, { ...rows[1], netSnapshot: false, z2Export: NaN }), null);
+assert.equal(call('utilityDeviation', { ...previousIndication, mode: 'mono' }, { ...rows[1], netSnapshot: false }), null);
+const measurementOnly = call('utilityDeviationResult', null, rows[0]);
+assert.equal(measurementOnly.value, null);
+assert.match(measurementOnly.reason, /Μέτρηση ΔΕΗ/);
 
 const legacy = call('parseUtilityHistoryRows', [
   '1,2026-10-03,mono,tk,100,0,0,10:00,1,10,0,0',
@@ -89,9 +93,11 @@ const legacy = call('parseUtilityHistoryRows', [
 ]);
 assert.equal(legacy[1].netSnapshot, false);
 assert.equal(call('utilityDeviation', legacy[0], legacy[1]), null);
-assert.match(call('utilityDeviationResult', legacy[0], legacy[1]).reason, /πλήρεις εσωτερικοί μετρητές/);
+assert.match(call('utilityDeviationResult', legacy[0], legacy[1]).reason, /προηγούμενη Καταχώρηση Ένδειξης/);
 const oldCell = call('utilityInternalCounterCell', legacy[1], 'z');
 assert.match(oldCell, /<b>—<\/b>/); assert(!oldCell.includes('12,000'));
+const measurementCell = call('utilityInternalCounterCell', rows[0], 'z1');
+assert.match(measurementCell, /<b>—<\/b>/);
 const old = call('parseUtilityHistoryRows', ['1,2026-10-04,mono,100,0,0,window']);
 assert.equal(old[0].kind, 'tk'); assert(!old[0].mapped);
 const invalidMetadata = { ...rows[1], pointSource: 0, netSnapshot: false, internalImport: 0, internalExport: 0 };
@@ -104,6 +110,7 @@ assert.match(call('utilityInternalCounterCell', rows[1], 'z2'), /<b>6,400<\/b>/)
 assert(!call('utilityInternalCounterCell', rows[1], 'z1').includes('63,700'));
 assert(!call('utilityInternalCounterCell', rows[1], 'z2').includes('44,900'));
 assert.match(call('utilityPointLabel', rows[1]), /Ακριβές δείγμα ESP · 20:46:32/);
+assert.match(call('utilityPointLabel', rows[0]), /Μέτρηση ΔΕΗ/);
 assert.match(call('utilityPointLabel', { ...rows[1], pointSource: 4 }), /08:00–18:00/);
 assert.match(call('utilityPointLabel', { ...rows[1], pointSource: 2 }), /Παρεμβολή/);
 assert.match(call('utilityPointLabel', { ...rows[1], pointSource: 3 }), /Κοντινό/);
@@ -119,10 +126,10 @@ for (const bodyRow of rendered.matchAll(/<tbody>([\s\S]*?)<\/tbody>/g)) {
 assert(call('utilityCanDelete', rows[0])); assert(call('utilityCanDelete', rows[1]));
 ctx.utilityHistoryRows = [...rows, { ...rows[1], id: 3, date: '2026-10-02', canDelete: true }];
 assert(!call('utilityCanDelete', rows[1])); assert(call('utilityCanDelete', ctx.utilityHistoryRows[2]));
-assert.match(call('utilityActionButtons', rows[1], 'dual', '3.15'), /disabled title=/);
-assert.match(call('utilityActionButtons', rows[1], 'dual', '3.15'), /data-utility-action="edit"[^>]*>/);
-ctx.devices.set('test', { state: { firmware: '3.15' } });
-const monoStart = { ...rows[0], mode: 'mono', z: 100 };
+assert.match(call('utilityActionButtons', rows[1], 'dual', '4.00'), /disabled title=/);
+assert.match(call('utilityActionButtons', rows[1], 'dual', '4.00'), /data-utility-action="edit"[^>]*>/);
+ctx.devices.set('test', { state: { firmware: '4.00' } });
+const monoStart = { ...rows[0], kind: 'ek', mode: 'mono', z: 100 };
 const monoEnd = { ...rows[1], mode: 'mono', z: 70.1, netSnapshot: false };
 ctx.utilityHistoryRows = [monoStart, monoEnd];
 near(call('utilityDeviation', monoStart, monoEnd), 0);
@@ -131,8 +138,10 @@ rendered = ui.utilityHistoryContent.innerHTML;
 assert.match(rendered, /ESP Ζ \(Ι−Ε\)/); assert.match(rendered, /0,00%/);
 assert.equal((rendered.match(/<th[ >]/g) || []).length, 8);
 
-// E.K. has no date/time steps and the ESP, not the browser, stamps a new entry.
+// Indication DEH is the default: no date/time steps; ESP stamps it now.
 call('resetUtilityEditor');
+assert.equal(ui.utilityKindIntermediate.checked, true);
+assert.equal(ui.utilityKindFinal.checked, false);
 ui.utilityKindFinal.checked = false; ui.utilityKindIntermediate.checked = true;
 ui.utilityDateInput.value = ''; ui.utilityTimeInput.value = ''; ui.utilityZInput.value = '70.10';
 assert.equal(call('utilityEntrySteps').join(','), '0,3,4');
@@ -144,12 +153,15 @@ assert.equal(call('utilityEntryAdjacentStep', -1), 0); assert.equal(call('utilit
 const ek = call('readUtilityForm');
 assert.equal(ek.commandTail, 'ek|mono|now|now|70.10'); assert(ek.automaticTime);
 assert(call('prepareUtilityConfirmation')); assert.match(ui.utilityConfirmSummary.innerHTML, /από τον ESP/);
-ctx.devices.get('test').state.firmware = '3.14';
-assert.equal(call('readUtilityForm'), null); assert.match(ctx.lastMessage, /v3.15/);
-ctx.devices.get('test').state.firmware = '3.15';
+ctx.devices.get('test').state.firmware = '3.99';
+assert.equal(call('readUtilityForm'), null); assert.match(ctx.lastMessage, /v4.00/);
+ctx.devices.get('test').state.firmware = '4.00';
 
-// T.K. explicitly selects declared time or the 08:00–18:00 estimate.
-call('resetUtilityEditor'); ui.utilityDateInput.value = '2026-10-03'; ui.utilityZInput.value = '100';
+// Measurement DEH explicitly selects its historical date and optional time.
+call('resetUtilityEditor');
+ui.utilityKindIntermediate.checked = false;
+ui.utilityKindFinal.checked = true;
+ui.utilityDateInput.value = '2026-10-03'; ui.utilityZInput.value = '100';
 assert.equal(call('utilityEntrySteps').join(','), '0,1,2,3,4');
 assert(ui.utilityTimeEstimated.checked); assert(ui.utilityTimeInput.disabled);
 assert.equal(call('readUtilityForm').commandTail, 'tk|mono|2026-10-03|window|100.00');
@@ -164,7 +176,7 @@ ui.utilityTimeInput.value = '24:00'; assert.equal(call('readUtilityForm'), null)
 assert.equal(call('localDateInputValue', new Date('2026-10-04T21:02:00Z')), '2026-10-05');
 assert.equal(call('localTimeInputValue', new Date('2026-10-04T21:02:00Z')), '00:02');
 
-// Value-only E.K. editing keeps the original source timestamp and kind.
+// Value-only indication editing keeps the original source timestamp and kind.
 call('openUtilityEntry', monoEnd);
 assert.equal(ctx.editingUtilityId, 2); assert(ui.utilityKindFinal.disabled && ui.utilityKindIntermediate.disabled);
 assert.equal(call('readUtilityForm').commandTail, 'ek|mono|2026-10-04|20:46|70.10');
@@ -195,9 +207,12 @@ vm.runInNewContext(source, {
   window: { addEventListener() {} }, navigator: {},
   localStorage: { getItem: () => null }, setTimeout: () => 1, console
 });
-assert.equal(footer[0].textContent, 'MQTT.app. v2.09');
+assert.equal(footer[0].textContent, 'MQTT.app. v2.10');
 assert.equal(dom.get('brokerStatus').textContent, 'Αποσυνδεδεμένο');
 assert(dom.get('utilityTimeExact').handlers.has('change'));
 assert(dom.get('utilityTimeEstimated').handlers.has('change'));
 assert(dom.get('utilityEntryDialog').handlers.has('click'));
-console.log('PASS: signed PV replay (synthetic), frozen and matched net comparisons, missing/legacy/continuity guards, absolute I/E table, E.K./T.K. wizard, Athens rollover and timestamp-preserving edits');
+console.log('PASS: v4.00 indication/measurement split, signed PV comparisons, wizard, history guards and timestamp-preserving edits');
+
+assert(html.includes('Καταχώρηση Ένδειξης Μετρητή ΔΕΗ'));
+assert(html.includes('Καταχώρηση Μέτρησης ΔΕΗ'));
