@@ -221,12 +221,16 @@ vm.runInNewContext(source, {
   window: { addEventListener() {} }, navigator: {},
   localStorage: { getItem: () => null }, setTimeout: () => 1, console
 });
-assert.equal(footer[0].textContent, 'MQTT.app. v2.11');
+assert.equal(footer[0].textContent, 'MQTT.app. v2.12');
 assert.equal(dom.get('brokerStatus').textContent, 'Αποσυνδεδεμένο');
 assert(dom.get('utilityTimeExact').handlers.has('change'));
 assert(dom.get('utilityTimeEstimated').handlers.has('change'));
 assert(dom.get('utilityEntryDialog').handlers.has('click'));
-console.log('PASS: v2.11 integer DEH measurements, simplified history, v4 indication split and timestamp-preserving edits');
+assert(dom.get('restartEspBtn').handlers.has('click'));
+assert(source.includes('sendAdmin("restart_esp"'));
+assert(source.includes('firmwareAtLeast(firmware, 4, 3)'));
+assert(html.includes('RESTART ESP'));
+console.log('PASS: v2.12 integer DEH measurements, simplified history, v4 indication split and timestamp-preserving edits');
 
 assert(html.includes('Καταχώρηση Ένδειξης Μετρητή ΔΕΗ'));
 assert(html.includes('Καταχώρηση Μέτρησης ΔΕΗ'));

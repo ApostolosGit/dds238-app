@@ -9,7 +9,7 @@
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="icon" href="icon-192.png" sizes="192x192">
   <link rel="apple-touch-icon" href="icon-192.png">
-  <link rel="stylesheet" href="style.css?v=2.0.11">
+  <link rel="stylesheet" href="style.css?v=2.0.12">
 </head>
 <body>
   <div class="app-shell">
@@ -56,7 +56,7 @@
     </main>
 
     <footer>
-      <span>MQTT.app. v2.11</span>
+      <span>MQTT.app. v2.12</span>
       <span>Auto discovery · MQTT wildcard · refresh 60″</span>
     </footer>
   </div>
@@ -137,6 +137,10 @@
         <p id="otaTargetInfo" class="admin-help">Επίλεξε OTA-UPDATE για έλεγχο της διαθέσιμης έκδοσης.</p>
         <button id="otaUpdateBtn" class="primary-btn admin-btn full-btn" type="button">OTA-UPDATE</button>
         <p class="admin-help">Η αναβάθμιση γίνεται από Internet μέσω MQTT + HTTPS. Ο ESP θα αποσυνδεθεί προσωρινά και θα επανεκκινήσει όταν ολοκληρωθεί.</p>
+        <div class="settings-divider"></div>
+        <h3>Restart ESP</h3>
+        <button id="restartEspBtn" class="danger-outline-btn admin-btn full-btn" type="button">RESTART ESP</button>
+        <p class="admin-help">Κάνει κανονική επανεκκίνηση του ESP8266 μετά από επιβεβαίωση. Απαιτεί firmware v4.03+.</p>
       </section>
 
       <p id="adminStatus" class="admin-status">Έτοιμο.</p>
@@ -327,6 +331,6 @@
   <div id="toast" class="toast hidden" role="status" aria-live="polite"></div>
 
   <script src="https://unpkg.com/mqtt@5.15.2/dist/mqtt.min.js"></script>
-  <script src="app.js?v=2.0.11"></script>
+  <script src="app.js?v=2.0.12"></script>
 </body>
 </html>
