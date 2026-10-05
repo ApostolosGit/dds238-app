@@ -15,7 +15,7 @@
     path: "/mqtt"
   };
 
-  const APP_VERSION = "2.10";
+  const APP_VERSION = "2.11";
   const AUTO_REFRESH_MS = 60000;
   const OTA_ACK_TIMEOUT_MS = 12000;
   const OTA_POLL_MS = 5000;
@@ -349,21 +349,27 @@
     return n < 0 ? "power-negative" : "power-positive";
   }
 
-  function tariffRow(label, value, unit = "kWh", extra = "") {
+  function tariffRow(label, value, unit = "kWh", extra = "", digits = 2, suffix = "") {
     const missing = value === null || value === undefined || value === "";
-    const display = missing ? "—" : formatNumber(value, 2);
+    const display = missing ? "—" : formatNumber(value, digits);
     return `
       <div class="tariff-row ${extra}">
         <span class="tariff-row-label">${escapeHtml(label)}</span>
         <span class="tariff-row-colon">:</span>
-        <b class="tariff-row-value">${escapeHtml(display)}${!missing && unit ? ` <small>${escapeHtml(unit)}</small>` : ""}</b>
+        <b class="tariff-row-value">${escapeHtml(display)}${!missing && unit ? ` <small>${escapeHtml(unit)}</small>` : ""}${!missing && suffix ? ` ${escapeHtml(suffix)}` : ""}</b>
       </div>`;
+  }
+
+  function utilityReferenceDateShort(value) {
+    const m = String(value || "").match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    return m ? `(${m[3]}/${m[2]})` : "";
   }
 
   function renderTariffEnergy(state) {
     const dual = state.dual_zone === true || state.tariff_mode === "dual";
     const hasUtility = state.has_utility === true;
     const estimateValid = state.estimate_valid === true;
+    const utilityDate = hasUtility ? utilityReferenceDateShort(state.utility_date) : "";
 
     const rowValue = (value, digits = 2) =>
       Number.isFinite(Number(value)) ? Number(value) : null;
@@ -389,13 +395,13 @@
               <h4>Ζ1 / Ακριβό τιμολόγιο</h4>
               ${tariffRow("Διαφορά", z1Diff, "kWh", diffTone(z1Diff))}
               ${tariffRow("Εκτίμηση τώρα", z1Now, "kWh")}
-              ${tariffRow("Τελευταία ΔΕΗ", z1Ref, "kWh")}
+              ${tariffRow("Τελευταία ΔΕΗ", z1Ref, "kWh", "", 0, utilityDate)}
             </article>
             <article class="tariff-zone-card cheap-zone-card">
               <h4>Ζ2 / Οικονομικό τιμολόγιο</h4>
               ${tariffRow("Διαφορά", z2Diff, "kWh", diffTone(z2Diff))}
               ${tariffRow("Εκτίμηση τώρα", z2Now, "kWh")}
-              ${tariffRow("Τελευταία ΔΕΗ", z2Ref, "kWh")}
+              ${tariffRow("Τελευταία ΔΕΗ", z2Ref, "kWh", "", 0, utilityDate)}
             </article>
           </div>
           ${!estimateValid
@@ -421,7 +427,7 @@
             <h4>Ζ</h4>
             ${tariffRow("Διαφορά", zDiff, "kWh", diffTone(zDiff))}
             ${tariffRow("Εκτίμηση τώρα", zNow, "kWh")}
-            ${tariffRow("Τελευταία ΔΕΗ", zRef, "kWh")}
+            ${tariffRow("Τελευταία ΔΕΗ", zRef, "kWh", "", 0, utilityDate)}
           </article>
         </div>
         ${!estimateValid
@@ -443,13 +449,14 @@
     const zRef = hasUtility ? s.z_ref : null;
     const zNow = estimateValid ? s.z_now : null;
     const zDiff = hasUtility && estimateValid ? s.z_diff : null;
+    const utilityDate = hasUtility ? utilityReferenceDateShort(s.utility_date) : "";
 
     const singleZoneMeter = dual ? "" : `
       <div class="dds-inline-column dds-meter-column">
         <div class="embedded-tariff-title">Μετρητής ΔΕΗ Ζ</div>
         ${tariffRow("Διαφορά", zDiff, "kWh", diffTone(zDiff))}
         ${tariffRow("Εκτίμηση τώρα", zNow, "kWh")}
-        ${tariffRow("Τελευταία ΔΕΗ", zRef, "kWh")}
+        ${tariffRow("Τελευταία ΔΕΗ", zRef, "kWh", "", 0, utilityDate)}
         ${!estimateValid ? '<div class="tariff-meta">Καταχώρησε Ένδειξη Μετρητή ΔΕΗ για Εκτίμηση τώρα.</div>' : (!hasUtility ? '<div class="tariff-meta">Καταχώρησε Μέτρηση ΔΕΗ για τη Διαφορά.</div>' : "")}
       </div>`;
 
@@ -1172,9 +1179,18 @@
 
   function updateUtilityReadingMode() {
     const dual = utilityCurrentDual();
+    const measurement = utilityKindValue() === "tk";
     ui.monoReadingFields.classList.toggle("hidden", dual);
     ui.dualReadingFields.classList.toggle("hidden", !dual);
     ui.utilityTariffLabel.textContent = `Τιμολόγιο: ${dual ? "Διζωνικό Ζ1 / Ζ2" : "Μονοζωνικό Ζ"}`;
+
+    [ui.utilityZInput, ui.utilityZ1Input, ui.utilityZ2Input].forEach((input) => {
+      if (!input) return;
+      input.step = measurement ? "1" : "0.01";
+      input.min = measurement ? "1" : "0.01";
+      input.max = measurement ? "999998" : "999998.99";
+      input.inputMode = measurement ? "numeric" : "decimal";
+    });
   }
 
   function openUtilityEntry(row = null) {
@@ -1207,11 +1223,12 @@
       ui.utilityKindFinal.disabled = true;
       ui.utilityKindIntermediate.disabled = true;
       updateUtilityTimeMode();
+      const digits = row.kind === "ek" ? 2 : 0;
       if (row.mode === "dual") {
-        ui.utilityZ1Input.value = row.z1.toFixed(2);
-        ui.utilityZ2Input.value = row.z2.toFixed(2);
+        ui.utilityZ1Input.value = row.z1.toFixed(digits);
+        ui.utilityZ2Input.value = row.z2.toFixed(digits);
       } else {
-        ui.utilityZInput.value = row.z.toFixed(2);
+        ui.utilityZInput.value = row.z.toFixed(digits);
       }
     }
 
@@ -1241,18 +1258,25 @@
     }
 
     if (step === 3) {
+      const measurement = utilityKindValue() === "tk";
       if (utilityCurrentDual()) {
         const z1 = Number(ui.utilityZ1Input.value);
         const z2 = Number(ui.utilityZ2Input.value);
         if (!Number.isFinite(z1) || !Number.isFinite(z2) ||
-            z1 <= 0 || z2 <= 0 || z1 >= 999999 || z2 >= 999999) {
-          showToast("Γράψε έγκυρες ενδείξεις Ζ1 και Ζ2.");
+            z1 <= 0 || z2 <= 0 || z1 >= 999999 || z2 >= 999999 ||
+            (measurement && (!Number.isInteger(z1) || !Number.isInteger(z2)))) {
+          showToast(measurement
+            ? "Οι Μετρήσεις ΔΕΗ Ζ1 και Ζ2 δίνονται σε ακέραιες kWh."
+            : "Γράψε έγκυρες ενδείξεις Ζ1 και Ζ2.");
           return false;
         }
       } else {
         const z = Number(ui.utilityZInput.value);
-        if (!Number.isFinite(z) || z <= 0 || z >= 999999) {
-          showToast("Γράψε έγκυρη ένδειξη Ζ.");
+        if (!Number.isFinite(z) || z <= 0 || z >= 999999 ||
+            (measurement && !Number.isInteger(z))) {
+          showToast(measurement
+            ? "Η Μέτρηση ΔΕΗ δίνεται σε ακέραιες kWh."
+            : "Γράψε έγκυρη ένδειξη Ζ.");
           return false;
         }
       }
@@ -1269,9 +1293,10 @@
       ? "Καταχώρηση Ένδειξης Μετρητή ΔΕΗ"
       : "Καταχώρηση Μέτρησης ΔΕΗ";
 
+    const valueDigits = form.kind === "tk" ? 0 : 2;
     const values = form.dual
-      ? `<div class="utility-confirm-values"><strong>Ζ1: ${formatNumber(form.z1, 2)} kWh</strong><strong>Ζ2: ${formatNumber(form.z2, 2)} kWh</strong></div>`
-      : `<div class="utility-confirm-values"><strong>Ζ: ${formatNumber(form.z, 2)} kWh</strong></div>`;
+      ? `<div class="utility-confirm-values"><strong>Ζ1: ${formatNumber(form.z1, valueDigits)} kWh</strong><strong>Ζ2: ${formatNumber(form.z2, valueDigits)} kWh</strong></div>`
+      : `<div class="utility-confirm-values"><strong>Ζ: ${formatNumber(form.z, valueDigits)} kWh</strong></div>`;
 
     ui.utilityConfirmSummary.innerHTML = `
       ${values}
@@ -1399,28 +1424,36 @@
       return null;
     }
 
+    const measurement = kind === "tk";
+    const digits = measurement ? 0 : 2;
     if (dual) {
       const z1 = Number(ui.utilityZ1Input.value);
       const z2 = Number(ui.utilityZ2Input.value);
       if (!Number.isFinite(z1) || !Number.isFinite(z2) ||
-          z1 <= 0 || z2 <= 0 || z1 >= 999999 || z2 >= 999999) {
-        setAdminStatus("Γράψε έγκυρες ενδείξεις Ζ1 και Ζ2.", "error");
+          z1 <= 0 || z2 <= 0 || z1 >= 999999 || z2 >= 999999 ||
+          (measurement && (!Number.isInteger(z1) || !Number.isInteger(z2)))) {
+        setAdminStatus(measurement
+          ? "Οι Μετρήσεις ΔΕΗ Ζ1 και Ζ2 δίνονται μόνο σε ακέραιες kWh."
+          : "Γράψε έγκυρες ενδείξεις Ζ1 και Ζ2.", "error");
         return null;
       }
       return {
         kind, dual: true, automaticTime, date, time, z1, z2,
-        commandTail: `${kind}|dual|${date}|${time}|${z1.toFixed(2)}|${z2.toFixed(2)}`
+        commandTail: `${kind}|dual|${date}|${time}|${z1.toFixed(digits)}|${z2.toFixed(digits)}`
       };
     }
 
     const z = Number(ui.utilityZInput.value);
-    if (!Number.isFinite(z) || z <= 0 || z >= 999999) {
-      setAdminStatus("Γράψε έγκυρη ένδειξη Ζ.", "error");
+    if (!Number.isFinite(z) || z <= 0 || z >= 999999 ||
+        (measurement && !Number.isInteger(z))) {
+      setAdminStatus(measurement
+        ? "Η Μέτρηση ΔΕΗ δίνεται μόνο σε ακέραιες kWh."
+        : "Γράψε έγκυρη ένδειξη Ζ.", "error");
       return null;
     }
     return {
       kind, dual: false, automaticTime, date, time, z,
-      commandTail: `${kind}|mono|${date}|${time}|${z.toFixed(2)}`
+      commandTail: `${kind}|mono|${date}|${time}|${z.toFixed(digits)}`
     };
   }
 
@@ -1767,8 +1800,8 @@
     }
 
     const values = latest.mode === "dual"
-      ? `<span><small>Ζ1</small><strong>${formatNumber(latest.z1, 2)} kWh</strong></span><span><small>Ζ2</small><strong>${formatNumber(latest.z2, 2)} kWh</strong></span>`
-      : `<span><small>Ζ</small><strong>${formatNumber(latest.z, 2)} kWh</strong></span>`;
+      ? `<span><small>Ζ1</small><strong>${formatNumber(latest.z1, 0)} kWh</strong></span><span><small>Ζ2</small><strong>${formatNumber(latest.z2, 0)} kWh</strong></span>`
+      : `<span><small>Ζ</small><strong>${formatNumber(latest.z, 0)} kWh</strong></span>`;
 
     ui.utilityLatestSummary.innerHTML = `
       <div class="utility-latest-values">${values}</div>
@@ -1789,22 +1822,18 @@
 
     if (monoRows.length) {
       let previousIndication = null;
-      let previousMeasurement = null;
       const body = monoRows.map((row) => {
-        const sameKindPrevious = row.kind === "ek" ? previousIndication : previousMeasurement;
-        const diff = sameKindPrevious ? row.z - sameKindPrevious.z : null;
+        const readingDigits = row.kind === "ek" ? 2 : 0;
         const html = `
           <tr>
             <td>${escapeHtml(utilityDateTimeLabel(row))}${utilityPointLabel(row)}</td>
             <td>${utilityKindBadge(row)}</td>
-            <td><b>${diff === null ? "—" : formatNumber(diff, 2)}</b></td>
-            <td>${formatNumber(row.z, 2)}</td>
+            <td>${formatNumber(row.z, readingDigits)}</td>
             ${utilityInternalCounterCell(row, "z")}
             ${utilityDeviationCell(previousIndication, row)}
             <td>${utilityActionButtons(row, currentMode, firmware)}</td>
           </tr>`;
         if (row.kind === "ek") previousIndication = row;
-        else previousMeasurement = row;
         return html;
       }).join("");
 
@@ -1812,7 +1841,7 @@
         <h3>Μετρήσεις Ζ</h3>
         <div class="history-table-wrap">
           <table class="utility-history-table">
-            <thead><tr><th>Ημερομηνία / Ώρα</th><th>Τύπος</th><th>Δ Ζ</th><th>Ζ ΔΕΗ</th><th>ESP Ζ (Ι−Ε)</th><th>Σύγκριση kWh</th><th>Σφάλμα %</th><th></th></tr></thead>
+            <thead><tr><th>Ημερομηνία / Ώρα</th><th>Τύπος</th><th>Ζ ΔΕΗ</th><th>ESP Ζ (Ι−Ε)</th><th>Σύγκριση kWh</th><th>Σφάλμα %</th><th></th></tr></thead>
             <tbody>${body}</tbody>
           </table>
         </div>`);
@@ -1820,28 +1849,20 @@
 
     if (dualRows.length) {
       let previousIndication = null;
-      let previousMeasurement = null;
       const body = dualRows.map((row) => {
-        const sameKindPrevious = row.kind === "ek" ? previousIndication : previousMeasurement;
-        const dz1 = sameKindPrevious ? row.z1 - sameKindPrevious.z1 : null;
-        const dz2 = sameKindPrevious ? row.z2 - sameKindPrevious.z2 : null;
-        const total = sameKindPrevious ? dz1 + dz2 : null;
+        const readingDigits = row.kind === "ek" ? 2 : 0;
         const html = `
           <tr>
             <td>${escapeHtml(utilityDateTimeLabel(row))}${utilityPointLabel(row)}</td>
             <td>${utilityKindBadge(row)}</td>
-            <td><b>${dz1 === null ? "—" : formatNumber(dz1, 2)}</b></td>
-            <td>${formatNumber(row.z1, 2)}</td>
+            <td>${formatNumber(row.z1, readingDigits)}</td>
             ${utilityInternalCounterCell(row, "z1")}
-            <td><b>${dz2 === null ? "—" : formatNumber(dz2, 2)}</b></td>
-            <td>${formatNumber(row.z2, 2)}</td>
+            <td>${formatNumber(row.z2, readingDigits)}</td>
             ${utilityInternalCounterCell(row, "z2")}
-            <td><b>${total === null ? "—" : formatNumber(total, 2)}</b></td>
             ${utilityDeviationCell(previousIndication, row)}
             <td>${utilityActionButtons(row, currentMode, firmware)}</td>
           </tr>`;
         if (row.kind === "ek") previousIndication = row;
-        else previousMeasurement = row;
         return html;
       }).join("");
 
@@ -1850,7 +1871,7 @@
         <div class="history-table-wrap">
           <table class="utility-history-table utility-history-dual">
             <thead>
-              <tr><th>Ημερομηνία / Ώρα</th><th>Τύπος</th><th>Δ Ζ1</th><th>Ζ1 ΔΕΗ</th><th>ESP Ζ1 (Ι−Ε)</th><th>Δ Ζ2</th><th>Ζ2 ΔΕΗ</th><th>ESP Ζ2 (Ι−Ε)</th><th>Σύνολο Δ</th><th>Σύγκριση kWh</th><th>Σφάλμα %</th><th></th></tr>
+              <tr><th>Ημερομηνία / Ώρα</th><th>Τύπος</th><th>Ζ1 ΔΕΗ</th><th>ESP Ζ1 (Ι−Ε)</th><th>Ζ2 ΔΕΗ</th><th>ESP Ζ2 (Ι−Ε)</th><th>Σύγκριση kWh</th><th>Σφάλμα %</th><th></th></tr>
             </thead>
             <tbody>${body}</tbody>
           </table>
@@ -2163,8 +2184,14 @@
 
   ui.startUtilityReadingBtn.addEventListener("click", () => openUtilityEntry());
 
-  ui.utilityKindFinal.addEventListener("change", () => setUtilityEntryStep(0));
-  ui.utilityKindIntermediate.addEventListener("change", () => setUtilityEntryStep(0));
+  ui.utilityKindFinal.addEventListener("change", () => {
+    updateUtilityReadingMode();
+    setUtilityEntryStep(0);
+  });
+  ui.utilityKindIntermediate.addEventListener("change", () => {
+    updateUtilityReadingMode();
+    setUtilityEntryStep(0);
+  });
   ui.utilityTimeExact.addEventListener("change", updateUtilityTimeMode);
   ui.utilityTimeEstimated.addEventListener("change", updateUtilityTimeMode);
 
@@ -2345,7 +2372,7 @@
     });
 
     window.addEventListener("load", () => {
-      navigator.serviceWorker.register("./sw.js?v=2.0.10", { updateViaCache: "none" })
+      navigator.serviceWorker.register("./sw.js?v=2.0.11", { updateViaCache: "none" })
         .then((registration) => {
           const checkForAppUpdate = () => {
             registration.update().catch((err) => {

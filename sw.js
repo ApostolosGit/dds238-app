@@ -1,11 +1,11 @@
-const CACHE_NAME = "energy-dds-jsy-pwa-v2.0.10";
+const CACHE_NAME = "energy-dds-jsy-pwa-v2.0.11";
 const CACHE_PREFIX = "energy-dds-jsy-pwa-";
 const APP_SCOPE = new URL("./", self.location.href).href;
 const APP_SHELL = [
   "./",
   "./index.html",
-  "./style.css?v=2.0.10",
-  "./app.js?v=2.0.10",
+  "./style.css?v=2.0.11",
+  "./app.js?v=2.0.11",
   "./manifest.webmanifest",
   "./icon-192.png",
   "./icon-512.png"
@@ -54,7 +54,7 @@ self.addEventListener("fetch", (event) => {
   let resource = event.request;
   if (["app.js", "style.css"].some((file) => url.pathname === new URL(file, APP_SCOPE).pathname)) {
     // Older cached HTML may still request ?v=2.0.0; serve the current asset URL.
-    url.search = "?v=2.0.10";
+    url.search = "?v=2.0.11";
     resource = new Request(url.href, { cache: "no-store" });
   }
   event.respondWith((async () => {

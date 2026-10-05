@@ -119,9 +119,12 @@ let rendered = ui.utilityHistoryContent.innerHTML;
 assert.match(rendered, /ESP Ζ1 \(Ι−Ε\)/); assert.match(rendered, /ESP Ζ2 \(Ι−Ε\)/);
 assert.match(rendered, /−|\-29,900/); assert.match(rendered, /0,00%/);
 assert.equal((rendered.match(/class="utility-internal-cell"/g) || []).length, 4);
-assert.equal((rendered.match(/<th[ >]/g) || []).length, 12);
+assert.equal((rendered.match(/<th[ >]/g) || []).length, 9);
+assert(!rendered.includes(">Δ Ζ1<"));
+assert(!rendered.includes(">Δ Ζ2<"));
+assert(!rendered.includes(">Σύνολο Δ<"));
 for (const bodyRow of rendered.matchAll(/<tbody>([\s\S]*?)<\/tbody>/g)) {
-  for (const tr of bodyRow[1].matchAll(/<tr>([\s\S]*?)<\/tr>/g)) assert.equal((tr[1].match(/<td[ >]/g) || []).length, 12);
+  for (const tr of bodyRow[1].matchAll(/<tr>([\s\S]*?)<\/tr>/g)) assert.equal((tr[1].match(/<td[ >]/g) || []).length, 9);
 }
 assert(call('utilityCanDelete', rows[0])); assert(call('utilityCanDelete', rows[1]));
 ctx.utilityHistoryRows = [...rows, { ...rows[1], id: 3, date: '2026-10-02', canDelete: true }];
@@ -136,13 +139,17 @@ near(call('utilityDeviation', monoStart, monoEnd), 0);
 call('renderUtilityHistory', 'test');
 rendered = ui.utilityHistoryContent.innerHTML;
 assert.match(rendered, /ESP Ζ \(Ι−Ε\)/); assert.match(rendered, /0,00%/);
-assert.equal((rendered.match(/<th[ >]/g) || []).length, 8);
+assert.equal((rendered.match(/<th[ >]/g) || []).length, 7);
+assert(!rendered.includes(">Δ Ζ<"));
 
 // Indication DEH is the default: no date/time steps; ESP stamps it now.
 call('resetUtilityEditor');
 assert.equal(ui.utilityKindIntermediate.checked, true);
 assert.equal(ui.utilityKindFinal.checked, false);
 ui.utilityKindFinal.checked = false; ui.utilityKindIntermediate.checked = true;
+call('updateUtilityReadingMode');
+assert.equal(ui.utilityZInput.step, '0.01');
+assert.equal(ui.utilityZInput.inputMode, 'decimal');
 ui.utilityDateInput.value = ''; ui.utilityTimeInput.value = ''; ui.utilityZInput.value = '70.10';
 assert.equal(call('utilityEntrySteps').join(','), '0,3,4');
 assert.equal(call('utilityEntryAdjacentStep', 1), 3);
@@ -161,16 +168,23 @@ ctx.devices.get('test').state.firmware = '4.00';
 call('resetUtilityEditor');
 ui.utilityKindIntermediate.checked = false;
 ui.utilityKindFinal.checked = true;
+call('updateUtilityReadingMode');
+assert.equal(ui.utilityZInput.step, '1');
+assert.equal(ui.utilityZInput.inputMode, 'numeric');
 ui.utilityDateInput.value = '2026-10-03'; ui.utilityZInput.value = '100';
 assert.equal(call('utilityEntrySteps').join(','), '0,1,2,3,4');
 assert(ui.utilityTimeEstimated.checked); assert(ui.utilityTimeInput.disabled);
-assert.equal(call('readUtilityForm').commandTail, 'tk|mono|2026-10-03|window|100.00');
+assert.equal(call('readUtilityForm').commandTail, 'tk|mono|2026-10-03|window|100');
 assert(call('utilityStepValid', 2));
 ui.utilityTimeEstimated.checked = false; ui.utilityTimeExact.checked = true; call('updateUtilityTimeMode');
 assert(!ui.utilityTimeInput.disabled); assert(ui.utilityTimeInput.required);
 assert(!call('utilityStepValid', 2)); assert.equal(call('readUtilityForm'), null);
 ui.utilityTimeInput.value = '17:45'; assert(call('utilityStepValid', 2));
-assert.equal(call('readUtilityForm').commandTail, 'tk|mono|2026-10-03|17:45|100.00');
+assert.equal(call('readUtilityForm').commandTail, 'tk|mono|2026-10-03|17:45|100');
+ui.utilityZInput.value = '100.5';
+assert.equal(call('readUtilityForm'), null);
+assert.match(ctx.lastMessage, /ακέραιες/);
+ui.utilityZInput.value = '100';
 assert(call('prepareUtilityConfirmation')); assert.match(ui.utilityConfirmSummary.innerHTML, /17:45/);
 ui.utilityTimeInput.value = '24:00'; assert.equal(call('readUtilityForm'), null);
 assert.equal(call('localDateInputValue', new Date('2026-10-04T21:02:00Z')), '2026-10-05');
@@ -207,12 +221,18 @@ vm.runInNewContext(source, {
   window: { addEventListener() {} }, navigator: {},
   localStorage: { getItem: () => null }, setTimeout: () => 1, console
 });
-assert.equal(footer[0].textContent, 'MQTT.app. v2.10');
+assert.equal(footer[0].textContent, 'MQTT.app. v2.11');
 assert.equal(dom.get('brokerStatus').textContent, 'Αποσυνδεδεμένο');
 assert(dom.get('utilityTimeExact').handlers.has('change'));
 assert(dom.get('utilityTimeEstimated').handlers.has('change'));
 assert(dom.get('utilityEntryDialog').handlers.has('click'));
-console.log('PASS: v4.00 indication/measurement split, signed PV comparisons, wizard, history guards and timestamp-preserving edits');
+console.log('PASS: v2.11 integer DEH measurements, simplified history, v4 indication split and timestamp-preserving edits');
 
 assert(html.includes('Καταχώρηση Ένδειξης Μετρητή ΔΕΗ'));
 assert(html.includes('Καταχώρηση Μέτρησης ΔΕΗ'));
+assert(source.includes('utilityReferenceDateShort'));
+assert(source.includes('tariffRow("Τελευταία ΔΕΗ", z1Ref, "kWh", "", 0, utilityDate)'));
+assert(source.includes('tariffRow("Τελευταία ΔΕΗ", z2Ref, "kWh", "", 0, utilityDate)'));
+assert(!source.includes('<th>Δ Ζ1</th>'));
+assert(!source.includes('<th>Δ Ζ2</th>'));
+assert(!source.includes('<th>Σύνολο Δ</th>'));
