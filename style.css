@@ -1284,6 +1284,24 @@ input:focus { border-color: #2b9c88; box-shadow: 0 0 0 3px rgba(43,156,136,.13);
 .kind-tk { background: #e5f5ef; color: #11705f; }
 .kind-ek { background: #edf1f8; color: #445b7a; }
 .deviation-cell { font-variant-numeric: tabular-nums; }
+.utility-internal-cell small, .utility-point-label {
+  display: block;
+  margin-top: 4px;
+  color: #60717e;
+  font-size: .64rem;
+  line-height: 1.35;
+}
+.utility-point-label { max-width: 190px; white-space: normal; }
+.utility-comparison-cell span { display: block; line-height: 1.5; }
+.deviation-reason {
+  display: block;
+  max-width: 170px;
+  margin: 4px 0 0 auto;
+  color: #60717e;
+  font-size: .66rem;
+  line-height: 1.35;
+  white-space: normal;
+}
 .history-note { margin: 12px 0 0; color: #6f7f8d; font-size: .7rem; line-height: 1.45; }
 .utility-history-dual { min-width: 850px; }
 

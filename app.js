@@ -15,7 +15,7 @@
     path: "/mqtt"
   };
 
-  const APP_VERSION = "2.08";
+  const APP_VERSION = "2.09";
   const AUTO_REFRESH_MS = 60000;
   const OTA_ACK_TIMEOUT_MS = 12000;
   const OTA_POLL_MS = 5000;
@@ -95,6 +95,9 @@
     closeUtilityEntryBtn: $("closeUtilityEntryBtn"),
     utilityDateInput: $("utilityDateInput"),
     utilityTimeInput: $("utilityTimeInput"),
+    utilityTimeExact: $("utilityTimeExact"),
+    utilityTimeEstimated: $("utilityTimeEstimated"),
+    utilityTimeField: $("utilityTimeField"),
     monoReadingFields: $("monoReadingFields"),
     dualReadingFields: $("dualReadingFields"),
     utilityZInput: $("utilityZInput"),
@@ -605,17 +608,21 @@
     autoRefreshTimer = setInterval(() => requestAll(false), AUTO_REFRESH_MS);
   }
 
+  function utilityLocalTimeParts(date = new Date()) {
+    return Object.fromEntries(new Intl.DateTimeFormat("en-GB", {
+      timeZone: "Europe/Athens", year: "numeric", month: "2-digit", day: "2-digit",
+      hour: "2-digit", minute: "2-digit", hourCycle: "h23"
+    }).formatToParts(date).map((part) => [part.type, part.value]));
+  }
+
   function localDateInputValue(date = new Date()) {
-    const y = date.getFullYear();
-    const m = String(date.getMonth() + 1).padStart(2, "0");
-    const d = String(date.getDate()).padStart(2, "0");
-    return `${y}-${m}-${d}`;
+    const p = utilityLocalTimeParts(date);
+    return `${p.year}-${p.month}-${p.day}`;
   }
 
   function localTimeInputValue(date = new Date()) {
-    const h = String(date.getHours()).padStart(2, "0");
-    const m = String(date.getMinutes()).padStart(2, "0");
-    return `${h}:${m}`;
+    const p = utilityLocalTimeParts(date);
+    return `${p.hour}:${p.minute}`;
   }
 
   function refreshDualZoneSettings(device) {
@@ -1119,12 +1126,34 @@
     ui.utilityEntryTitle.textContent = "Νέα καταχώρηση";
     ui.utilityKindFinal.checked = true;
     ui.utilityKindIntermediate.checked = false;
+    ui.utilityKindFinal.disabled = false;
+    ui.utilityKindIntermediate.disabled = false;
+    ui.utilityTimeExact.checked = false;
+    ui.utilityTimeEstimated.checked = true;
+    updateUtilityTimeMode();
     ui.utilityDateInput.value = localDateInputValue();
-    ui.utilityTimeInput.value = localTimeInputValue();
+    ui.utilityTimeInput.value = "";
     ui.utilityZInput.value = "";
     ui.utilityZ1Input.value = "";
     ui.utilityZ2Input.value = "";
     setUtilityEntryStep(0);
+  }
+
+  function utilityEntrySteps() {
+    return utilityKindValue() === "ek" ? [0, 3, 4] : [0, 1, 2, 3, 4];
+  }
+
+  function utilityEntryAdjacentStep(direction) {
+    const steps = utilityEntrySteps();
+    const index = steps.indexOf(utilityEntryStep);
+    return steps[Math.max(0, Math.min(steps.length - 1, index + direction))];
+  }
+
+  function updateUtilityTimeMode() {
+    const estimated = ui.utilityTimeEstimated.checked;
+    ui.utilityTimeField.classList.toggle("hidden", estimated);
+    ui.utilityTimeInput.disabled = estimated;
+    ui.utilityTimeInput.required = !estimated;
   }
 
   function setUtilityEntryStep(step) {
@@ -1137,7 +1166,8 @@
       ui.utilityStepConfirm
     ];
     steps.forEach((node, index) => node.classList.toggle("hidden", index !== utilityEntryStep));
-    ui.utilityStepLabel.textContent = `Βήμα ${utilityEntryStep + 1} από 5`;
+    const activeSteps = utilityEntrySteps();
+    ui.utilityStepLabel.textContent = `Βήμα ${activeSteps.indexOf(utilityEntryStep) + 1} από ${activeSteps.length}`;
   }
 
   function updateUtilityReadingMode() {
@@ -1172,6 +1202,11 @@
       ui.utilityKindIntermediate.checked = row.kind === "ek";
       ui.utilityDateInput.value = row.date;
       ui.utilityTimeInput.value = row.timeToken === "window" ? "" : row.timeToken;
+      ui.utilityTimeEstimated.checked = row.timeToken === "window";
+      ui.utilityTimeExact.checked = !ui.utilityTimeEstimated.checked;
+      ui.utilityKindFinal.disabled = true;
+      ui.utilityKindIntermediate.disabled = true;
+      updateUtilityTimeMode();
       if (row.mode === "dual") {
         ui.utilityZ1Input.value = row.z1.toFixed(2);
         ui.utilityZ2Input.value = row.z2.toFixed(2);
@@ -1197,6 +1232,7 @@
     }
 
     if (step === 2) {
+      if (ui.utilityTimeEstimated.checked) return true;
       if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(ui.utilityTimeInput.value.trim())) {
         showToast("Επίλεξε την ώρα που πήρες την ένδειξη.");
         return false;
@@ -1241,8 +1277,9 @@
       ${values}
       <div>Τιμολόγιο: <b>${form.dual ? "Διζωνικό Ζ1 / Ζ2" : "Μονοζωνικό Ζ"}</b></div>
       <div>Τύπος: <b>${kindLabel}</b></div>
-      <div>Ημερομηνία: <b>${escapeHtml(form.date)}</b></div>
-      <div>Ώρα: <b>${escapeHtml(form.time)}</b></div>
+      ${form.automaticTime
+        ? '<div>Ημερομηνία / ώρα: <b>τρέχουσα, από τον ESP κατά την αποθήκευση</b></div><div>Σύνδεση με τους τρέχοντες εσωτερικούς μετρητές.</div>'
+        : `<div>Ημερομηνία: <b>${escapeHtml(form.date)}</b></div><div>Ώρα: <b>${form.time === "window" ? "Κατ’εκτίμηση · 08:00–18:00" : escapeHtml(form.time)}</b></div>`}
     `;
     return true;
   }
@@ -1345,14 +1382,19 @@
 
     const dual = utilityCurrentDual();
     const kind = utilityKindValue();
-    const date = ui.utilityDateInput.value.trim();
-    const time = ui.utilityTimeInput.value.trim();
+    const automaticTime = kind === "ek" && editingUtilityId === null;
+    if (automaticTime && !firmwareAtLeast(device.state.firmware, 3, 15)) {
+      setAdminStatus("Η αυτόματη Ε.Κ. με καθαρό ισοζύγιο απαιτεί firmware v3.15+.", "error");
+      return null;
+    }
+    const date = automaticTime ? "now" : ui.utilityDateInput.value.trim();
+    const time = automaticTime ? "now" : (ui.utilityTimeEstimated.checked ? "window" : ui.utilityTimeInput.value.trim());
 
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+    if (!automaticTime && !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
       setAdminStatus("Επίλεξε έγκυρη ημερομηνία μέτρησης.", "error");
       return null;
     }
-    if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(time)) {
+    if (!automaticTime && time !== "window" && !/^([01]\d|2[0-3]):[0-5]\d$/.test(time)) {
       setAdminStatus("Επίλεξε έγκυρη ώρα μέτρησης.", "error");
       return null;
     }
@@ -1366,7 +1408,7 @@
         return null;
       }
       return {
-        kind, dual: true, date, time, z1, z2,
+        kind, dual: true, automaticTime, date, time, z1, z2,
         commandTail: `${kind}|dual|${date}|${time}|${z1.toFixed(2)}|${z2.toFixed(2)}`
       };
     }
@@ -1377,7 +1419,7 @@
       return null;
     }
     return {
-      kind, dual: false, date, time, z,
+      kind, dual: false, automaticTime, date, time, z,
       commandTail: `${kind}|mono|${date}|${time}|${z.toFixed(2)}`
     };
   }
@@ -1541,7 +1583,18 @@
             ekFlags: f.length >= 16 ? Number(f[12]) : 0,
             predictedWh: f.length >= 16 ? Number(f[13]) : NaN,
             actualWh: f.length >= 16 ? Number(f[14]) : NaN,
-            canDelete: f.length >= 16 ? f[15] === "1" : null
+            canDelete: f.length >= 16 ? f[15] === "1" : null,
+            netSnapshot: f.length >= 26 && f[16] === "1",
+            pointEpoch: f.length >= 26 ? Number(f[17]) : 0,
+            pointSource: f.length >= 26 ? Number(f[18]) : 0,
+            internalImport: f.length >= 26 ? Number(f[19]) : NaN,
+            internalExport: f.length >= 26 ? Number(f[20]) : NaN,
+            z1Import: f.length >= 26 ? Number(f[21]) : NaN,
+            z1Export: f.length >= 26 ? Number(f[22]) : NaN,
+            z2Import: f.length >= 26 ? Number(f[23]) : NaN,
+            z2Export: f.length >= 26 ? Number(f[24]) : NaN,
+            generation: f.length >= 26 ? Number(f[25]) : 0,
+            sampleEpoch: f.length >= 27 ? Number(f[26]) : (f.length >= 26 ? Number(f[17]) : 0)
           };
         }
         if (f.length < 7) return null;
@@ -1587,38 +1640,71 @@
     return `<span class="reading-kind ${isEk ? "kind-ek" : "kind-tk"}" title="${isEk ? "Ενδιάμεση Καταχώρηση" : "Τελική Καταχώρηση"}">${isEk ? "Ε.Κ." : "Τ.Κ."}</span>`;
   }
 
+  function utilityDeviationResult(previous, row) {
+    let actualKwh = null, espKwh = null;
+    const unavailable = (reason) => ({ value: null, actualKwh, espKwh, reason });
+    const calculate = () => {
+      if (!Number.isFinite(actualKwh) || !Number.isFinite(espKwh)) return unavailable("Χωρίς πλήρη σύγκριση εισαγωγής / εξαγωγής");
+      if (actualKwh === 0) return unavailable("Μηδενικό καθαρό ισοζύγιο ΔΕΗ");
+      if (Math.abs(actualKwh) < MIN_DEVIATION_KWH) return unavailable(`Ισοζύγιο κάτω από ${formatNumber(MIN_DEVIATION_KWH, 1)} kWh`);
+      // Absolute denominator keeps the error's sign meaningful during export.
+      return { value: ((espKwh - actualKwh) / Math.abs(actualKwh)) * 100, actualKwh, espKwh, reason: "" };
+    };
+    if (row.kind === "ek" && row.netSnapshot && (row.ekFlags & 4)) {
+      if (row.ekFlags & 8) espKwh = Number.isFinite(row.predictedWh) ? row.predictedWh / 1000 : null;
+      if (!(row.ekFlags & 8)) return unavailable("Δεν υπάρχει πλήρης βάση σύγκρισης");
+      actualKwh = Number.isFinite(row.actualWh) ? row.actualWh / 1000 : null;
+      if (!(row.ekFlags & 2)) return unavailable("Μηδενικό καθαρό ισοζύγιο ΔΕΗ");
+      return calculate();
+    }
+    if (!previous) return unavailable("Πρώτη καταχώρηση");
+    if (previous.mode !== row.mode) return unavailable("Διαφορετικό τιμολόγιο");
+    actualKwh = row.mode === "dual" ? (row.z1 + row.z2) - (previous.z1 + previous.z2) : row.z - previous.z;
+    if (!previous.pointSource || !row.pointSource) return unavailable("Απαιτούνται πλήρεις εσωτερικοί μετρητές από firmware v3.15+");
+    if (previous.generation !== row.generation || !row.generation) return unavailable("Διακοπή συνέχειας εσωτερικών μετρητών");
+    if (row.pointEpoch < previous.pointEpoch) return unavailable("Οι στιγμές των εσωτερικών μετρητών δεν είναι διαδοχικές");
+    const keys = row.mode === "dual" ? ["z1Import", "z1Export", "z2Import", "z2Export"] : ["internalImport", "internalExport"];
+    if (!keys.every((key) => Number.isFinite(row[key]) && Number.isFinite(previous[key]) && row[key] >= previous[key] && previous[key] >= 0)) {
+      return unavailable("Μη διαθέσιμοι ή ασυνεχείς εσωτερικοί μετρητές");
+    }
+    espKwh = row.mode === "dual"
+      ? (row.z1Import - previous.z1Import) + (row.z2Import - previous.z2Import) - (row.z1Export - previous.z1Export) - (row.z2Export - previous.z2Export)
+      : (row.internalImport - previous.internalImport) - (row.internalExport - previous.internalExport);
+    return calculate();
+  }
+
   function utilityDeviation(previous, row) {
-    // Firmware freezes the same-period comparison before a near-now correction.
-    // It remains valid after restart, later consumption, edits/deletion of other rows.
-    if (row.kind === "ek" && (row.ekFlags & 4)) {
-      if (!(row.ekFlags & 2) || !Number.isFinite(row.predictedWh) ||
-          !Number.isFinite(row.actualWh) || row.actualWh < MIN_DEVIATION_KWH * 1000 ||
-          row.predictedWh < 0) return null;
-      return ((row.predictedWh - row.actualWh) / row.actualWh) * 100;
-    }
-    if (!previous || !previous.mapped || !row.mapped || previous.mode !== row.mode) return null;
-
-    let realDelta;
-    let espDelta;
-    if (row.mode === "dual") {
-      realDelta = (row.z1 + row.z2) - (previous.z1 + previous.z2);
-      if (![row.anchorZ1, row.anchorZ2, previous.anchorZ1, previous.anchorZ2].every(Number.isFinite)) return null;
-      espDelta = (row.anchorZ1 + row.anchorZ2) - (previous.anchorZ1 + previous.anchorZ2);
-    } else {
-      realDelta = row.z - previous.z;
-      if (![row.anchor, previous.anchor].every(Number.isFinite)) return null;
-      espDelta = row.anchor - previous.anchor;
-    }
-
-    if (!Number.isFinite(realDelta) || !Number.isFinite(espDelta) ||
-        realDelta < MIN_DEVIATION_KWH || espDelta < 0) return null;
-    return ((espDelta - realDelta) / realDelta) * 100;
+    return utilityDeviationResult(previous, row).value;
   }
 
   function deviationText(value) {
     if (!Number.isFinite(value)) return "—";
-    const sign = value > 0 ? "+" : "";
-    return `${sign}${formatNumber(value, 2)}%`;
+    return `${value > 0 ? "+" : ""}${formatNumber(value, 2)}%`;
+  }
+
+  function utilityDeviationCell(previous, row) {
+    const result = utilityDeviationResult(previous, row);
+    const amount = (value) => Number.isFinite(value) ? formatNumber(value, 3) : "—";
+    const reason = result.reason ? `<small class="deviation-reason">${escapeHtml(result.reason)}</small>` : "";
+    return `<td class="utility-comparison-cell"><span>ΔΕΗ <b>${amount(result.actualKwh)}</b></span><span>ESP <b>${amount(result.espKwh)}</b></span></td><td class="deviation-cell"><b>${deviationText(result.value)}</b>${reason}</td>`;
+  }
+
+  function utilityInternalCounterCell(row, zone) {
+    const importKey = zone === "z" ? "internalImport" : `${zone}Import`;
+    const exportKey = zone === "z" ? "internalExport" : `${zone}Export`;
+    const full = row.pointSource && Number.isFinite(row[importKey]) && Number.isFinite(row[exportKey]);
+    const net = full ? row[importKey] - row[exportKey] : null;
+    return `<td class="utility-internal-cell"><b>${Number.isFinite(net) ? formatNumber(net, 3) : "—"}</b></td>`;
+  }
+
+  function utilityPointLabel(row) {
+    const labels = { 1: "Ακριβές δείγμα ESP", 2: "Παρεμβολή ιστορικού ESP", 3: "Κοντινό δείγμα ESP", 4: "Μέση τιμή ESP 08:00–18:00" };
+    let label = labels[row.pointSource] || "Χωρίς πλήρες ιστορικό ESP";
+    if (row.pointSource && row.sampleEpoch > 0 && row.pointSource !== 4) {
+      const time = new Intl.DateTimeFormat("el-GR", { timeZone: "Europe/Athens", hour: "2-digit", minute: "2-digit", second: "2-digit", hourCycle: "h23" }).format(new Date(row.sampleEpoch * 1000));
+      label += ` · ${time}`;
+    }
+    return `<small class="utility-point-label">${escapeHtml(label)}</small>`;
   }
 
   function utilityCanDelete(row) {
@@ -1690,14 +1776,14 @@
       let previous = null;
       const body = monoRows.map((row) => {
         const diff = previous ? row.z - previous.z : null;
-        const deviation = utilityDeviation(previous, row);
         const html = `
           <tr>
-            <td>${escapeHtml(utilityDateTimeLabel(row))}</td>
+            <td>${escapeHtml(utilityDateTimeLabel(row))}${utilityPointLabel(row)}</td>
             <td>${utilityKindBadge(row)}</td>
             <td><b>${diff === null ? "—" : formatNumber(diff, 2)}</b></td>
             <td>${formatNumber(row.z, 2)}</td>
-            <td class="deviation-cell"><b>${deviationText(deviation)}</b></td>
+            ${utilityInternalCounterCell(row, "z")}
+            ${utilityDeviationCell(previous, row)}
             <td>${utilityActionButtons(row, currentMode, firmware)}</td>
           </tr>`;
         previous = row;
@@ -1708,7 +1794,7 @@
         <h3>Μετρήσεις Ζ</h3>
         <div class="history-table-wrap">
           <table class="utility-history-table">
-            <thead><tr><th>Ημερομηνία / Ώρα</th><th>Τύπος</th><th>Διαφορά</th><th>Ζ</th><th>Απόκλιση</th><th></th></tr></thead>
+            <thead><tr><th>Ημερομηνία / Ώρα</th><th>Τύπος</th><th>Δ Ζ</th><th>Ζ ΔΕΗ</th><th>ESP Ζ (Ι−Ε)</th><th>Σύγκριση kWh</th><th>Σφάλμα %</th><th></th></tr></thead>
             <tbody>${body}</tbody>
           </table>
         </div>`);
@@ -1720,17 +1806,18 @@
         const dz1 = previous ? row.z1 - previous.z1 : null;
         const dz2 = previous ? row.z2 - previous.z2 : null;
         const total = previous ? dz1 + dz2 : null;
-        const deviation = utilityDeviation(previous, row);
         const html = `
           <tr>
-            <td>${escapeHtml(utilityDateTimeLabel(row))}</td>
+            <td>${escapeHtml(utilityDateTimeLabel(row))}${utilityPointLabel(row)}</td>
             <td>${utilityKindBadge(row)}</td>
             <td><b>${dz1 === null ? "—" : formatNumber(dz1, 2)}</b></td>
             <td>${formatNumber(row.z1, 2)}</td>
+            ${utilityInternalCounterCell(row, "z1")}
             <td><b>${dz2 === null ? "—" : formatNumber(dz2, 2)}</b></td>
             <td>${formatNumber(row.z2, 2)}</td>
+            ${utilityInternalCounterCell(row, "z2")}
             <td><b>${total === null ? "—" : formatNumber(total, 2)}</b></td>
-            <td class="deviation-cell"><b>${deviationText(deviation)}</b></td>
+            ${utilityDeviationCell(previous, row)}
             <td>${utilityActionButtons(row, currentMode, firmware)}</td>
           </tr>`;
         previous = row;
@@ -1742,7 +1829,7 @@
         <div class="history-table-wrap">
           <table class="utility-history-table utility-history-dual">
             <thead>
-              <tr><th>Ημερομηνία / Ώρα</th><th>Τύπος</th><th>Δ Ζ1</th><th>Ζ1</th><th>Δ Ζ2</th><th>Ζ2</th><th>Σύνολο Δ</th><th>Απόκλιση</th><th></th></tr>
+              <tr><th>Ημερομηνία / Ώρα</th><th>Τύπος</th><th>Δ Ζ1</th><th>Ζ1 ΔΕΗ</th><th>ESP Ζ1 (Ι−Ε)</th><th>Δ Ζ2</th><th>Ζ2 ΔΕΗ</th><th>ESP Ζ2 (Ι−Ε)</th><th>Σύνολο Δ</th><th>Σύγκριση kWh</th><th>Σφάλμα %</th><th></th></tr>
             </thead>
             <tbody>${body}</tbody>
           </table>
@@ -1750,7 +1837,8 @@
     }
 
     if (sections.length) {
-      sections.push(`<p class="history-note">Η % απόκλιση είναι συμβουλευτική και συγκρίνει τη μεταβολή του ESP με τη μεταβολή ανάμεσα σε δύο διαδοχικές πραγματικές καταχωρήσεις. Για μεταβολή κάτω από ${formatNumber(MIN_DEVIATION_KWH, 1)} kWh εμφανίζεται —.</p>`);
+      sections.unshift('<p class="history-note">Χρονική σειρά: παλαιότερη → νεότερη. Ι = εισαγωγή, Ε = εξαγωγή. Δίπλα σε κάθε Ζ/Ζ1/Ζ2 εμφανίζεται ο εσωτερικός ESP (Ι−Ε) της αντίστοιχης στιγμής. Οι απόλυτες τιμές ESP έχουν δική τους αρχή· συγκρίνουμε τις μεταβολές τους.</p>');
+      sections.push(`<p class="history-note">Σφάλμα % = 100 × (ισοζύγιο ESP − ισοζύγιο ΔΕΗ) / |ισοζύγιο ΔΕΗ|, για την ίδια περίοδο. Αρνητικό ισοζύγιο επιτρέπεται με Φ/Β. Η Ε.Κ. διατηρεί τη σύγκριση πριν τη διόρθωση. Για |ισοζύγιο ΔΕΗ| κάτω από ${formatNumber(MIN_DEVIATION_KWH, 1)} kWh ή ελλιπή στοιχεία εμφανίζεται — με την αιτία.</p>`);
     }
 
     ui.utilityHistoryTitle.textContent = `Πίνακας μετρήσεων · ${id}`;
@@ -2054,6 +2142,11 @@
 
   ui.startUtilityReadingBtn.addEventListener("click", () => openUtilityEntry());
 
+  ui.utilityKindFinal.addEventListener("change", () => setUtilityEntryStep(0));
+  ui.utilityKindIntermediate.addEventListener("change", () => setUtilityEntryStep(0));
+  ui.utilityTimeExact.addEventListener("change", updateUtilityTimeMode);
+  ui.utilityTimeEstimated.addEventListener("change", updateUtilityTimeMode);
+
   ui.closeUtilityEntryBtn.addEventListener("click", () => {
     ui.utilityEntryDialog.close();
     resetUtilityEditor();
@@ -2065,14 +2158,14 @@
     const action = button.dataset.entryAction;
 
     if (action === "back") {
-      setUtilityEntryStep(utilityEntryStep - 1);
+      setUtilityEntryStep(utilityEntryAdjacentStep(-1));
       return;
     }
 
     if (action === "next") {
       if (!utilityStepValid(utilityEntryStep)) return;
       if (utilityEntryStep === 3 && !prepareUtilityConfirmation()) return;
-      setUtilityEntryStep(utilityEntryStep + 1);
+      setUtilityEntryStep(utilityEntryAdjacentStep(1));
     }
   });
 
@@ -2231,7 +2324,7 @@
     });
 
     window.addEventListener("load", () => {
-      navigator.serviceWorker.register("./sw.js?v=2.0.8-r2", { updateViaCache: "none" })
+      navigator.serviceWorker.register("./sw.js?v=2.0.9", { updateViaCache: "none" })
         .then((registration) => {
           const checkForAppUpdate = () => {
             registration.update().catch((err) => {
