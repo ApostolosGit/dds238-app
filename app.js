@@ -1664,7 +1664,9 @@
       if (!(row.ekFlags & 2)) return unavailable("Μηδενικό καθαρό ισοζύγιο ΔΕΗ");
       return calculate();
     }
-    if (!previous) return unavailable("Πρώτη καταχώρηση");
+    if (!previous || previous.kind !== "ek") {
+      return unavailable("Δεν υπάρχει προηγούμενη Καταχώρηση Ένδειξης για σύγκριση");
+    }
     if (previous.mode !== row.mode) return unavailable("Διαφορετικό τιμολόγιο");
     actualKwh = row.mode === "dual" ? (row.z1 + row.z2) - (previous.z1 + previous.z2) : row.z - previous.z;
     if (!previous.pointSource || !row.pointSource) return unavailable("Απαιτούνται πλήρεις εσωτερικοί μετρητές από firmware v3.15+");
