@@ -1234,7 +1234,7 @@
     if (step === 2) {
       if (ui.utilityTimeEstimated.checked) return true;
       if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(ui.utilityTimeInput.value.trim())) {
-        showToast("Επίλεξε την ώρα που πήρες την ένδειξη.");
+        showToast("Επίλεξε την ώρα που η ΔΕΗ πραγματοποίησε τη μέτρηση.");
         return false;
       }
       return true;
@@ -1705,6 +1705,9 @@
   }
 
   function utilityPointLabel(row) {
+    if (row && row.kind !== "ek") {
+      return '<small class="utility-point-label">Μέτρηση ΔΕΗ · μόνο για «ΔΕΗ τελευταία» / Διαφορά</small>';
+    }
     const labels = { 1: "Ακριβές δείγμα ESP", 2: "Παρεμβολή ιστορικού ESP", 3: "Κοντινό δείγμα ESP", 4: "Μέση τιμή ESP 08:00–18:00" };
     let label = labels[row.pointSource] || "Χωρίς πλήρες ιστορικό ESP";
     if (row.pointSource && row.sampleEpoch > 0 && row.pointSource !== 4) {
