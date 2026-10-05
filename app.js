@@ -15,7 +15,7 @@
     path: "/mqtt"
   };
 
-  const APP_VERSION = "2.11";
+  const APP_VERSION = "2.12";
   const AUTO_REFRESH_MS = 60000;
   const OTA_ACK_TIMEOUT_MS = 12000;
   const OTA_POLL_MS = 5000;
@@ -112,6 +112,7 @@
     adminStatus: $("adminStatus"),
     otaTargetInfo: $("otaTargetInfo"),
     otaUpdateBtn: $("otaUpdateBtn"),
+    restartEspBtn: $("restartEspBtn"),
     otaPinDialog: $("otaPinDialog"),
     otaPinForm: $("otaPinForm"),
     otaPinInput: $("otaPinInput"),
@@ -1360,6 +1361,7 @@
     const state = device ? (device.state || {}) : {};
     const supportsV3 = Boolean(device && firmwareAtLeast(state.firmware, 3, 0));
     const supportsTypes = Boolean(device && firmwareAtLeast(state.firmware, 4, 0));
+    const supportsRestart = Boolean(device && firmwareAtLeast(state.firmware, 4, 3));
 
     if (ui.utilityHistoryBtn) {
       ui.utilityHistoryBtn.disabled = !adminTargetId || busy || !connected || !supportsV3;
@@ -1397,6 +1399,13 @@
       ui.otaUpdateBtn.disabled =
         !adminTargetId || busy || !connected || otaManifestLoading ||
         !firmwareAtLeast(fwForOta, 2, 29);
+    }
+    if (ui.restartEspBtn) {
+      ui.restartEspBtn.disabled =
+        !adminTargetId || busy || !connected || !supportsRestart;
+      ui.restartEspBtn.title = supportsRestart
+        ? "Κανονική επανεκκίνηση του ESP8266"
+        : "Απαιτεί firmware v4.03+";
     }
   }
 
@@ -1585,6 +1594,14 @@
     }
 
     if (data.cmd === "utility_readings_list") {
+      return;
+    }
+
+    if (data.cmd === "restart_esp") {
+      const msg = "Ο ESP8266 επανεκκινείται. Θα επανέλθει αυτόματα σε λίγα δευτερόλεπτα.";
+      if (adminTargetId === id) setAdminStatus(msg, "ok");
+      showToast(`${id}: επανεκκίνηση ESP8266…`, 5000);
+      setTimeout(() => requestUpdate(id, false), 6000);
       return;
     }
 
@@ -2141,6 +2158,20 @@
     if (adminTargetId) startRemoteOta(adminTargetId);
   });
 
+  ui.restartEspBtn.addEventListener("click", () => {
+    if (!adminTargetId) return;
+    const device = devices.get(adminTargetId);
+    const firmware = String((device && device.state && device.state.firmware) || "");
+    if (!firmwareAtLeast(firmware, 4, 3)) {
+      setAdminStatus("Το Restart ESP απαιτεί firmware v4.03+.", "error");
+      return;
+    }
+    if (!window.confirm(
+      `Να γίνει επανεκκίνηση του ESP8266 ${adminTargetId};\n\nΟι μετρήσεις και το MQTT θα διακοπούν για λίγα δευτερόλεπτα.`
+    )) return;
+    sendAdmin("restart_esp", "Αποστολή εντολής Restart ESP…");
+  });
+
   ui.closeOtaPinBtn.addEventListener("click", () => {
     otaTargetId = null;
     otaPendingManifest = null;
@@ -2372,7 +2403,7 @@
     });
 
     window.addEventListener("load", () => {
-      navigator.serviceWorker.register("./sw.js?v=2.0.11", { updateViaCache: "none" })
+      navigator.serviceWorker.register("./sw.js?v=2.0.12", { updateViaCache: "none" })
         .then((registration) => {
           const checkForAppUpdate = () => {
             registration.update().catch((err) => {
