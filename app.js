@@ -1693,12 +1693,8 @@
     const importKey = zone === "z" ? "internalImport" : `${zone}Import`;
     const exportKey = zone === "z" ? "internalExport" : `${zone}Export`;
     const full = row.pointSource && Number.isFinite(row[importKey]) && Number.isFinite(row[exportKey]);
-    const oldImport = zone === "z" ? row.anchor : zone === "z1" ? row.anchorZ1 : row.anchorZ2;
-    const imported = full ? row[importKey] : (row.mapped && Number.isFinite(oldImport) ? oldImport : null);
-    const exported = full ? row[exportKey] : null;
-    const format = (value) => Number.isFinite(value) ? formatNumber(value, 3) : "—";
-    const net = full ? imported - exported : null;
-    return `<td class="utility-internal-cell"><b>${format(net)}</b><small>Ι ${format(imported)} · Ε ${format(exported)}</small></td>`;
+    const net = full ? row[importKey] - row[exportKey] : null;
+    return `<td class="utility-internal-cell"><b>${Number.isFinite(net) ? formatNumber(net, 3) : "—"}</b></td>`;
   }
 
   function utilityPointLabel(row) {
