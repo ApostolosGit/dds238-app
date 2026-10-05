@@ -1697,6 +1697,9 @@
   }
 
   function utilityInternalCounterCell(row, zone) {
+    if (!row || row.kind !== "ek") {
+      return '<td class="utility-internal-cell"><b>—</b></td>';
+    }
     const importKey = zone === "z" ? "internalImport" : `${zone}Import`;
     const exportKey = zone === "z" ? "internalExport" : `${zone}Export`;
     const full = row.pointSource && Number.isFinite(row[importKey]) && Number.isFinite(row[exportKey]);
