@@ -154,7 +154,7 @@ const ek = call('readUtilityForm');
 assert.equal(ek.commandTail, 'ek|mono|now|now|70.10'); assert(ek.automaticTime);
 assert(call('prepareUtilityConfirmation')); assert.match(ui.utilityConfirmSummary.innerHTML, /από τον ESP/);
 ctx.devices.get('test').state.firmware = '3.99';
-assert.equal(call('readUtilityForm'), null); assert.match(ctx.lastMessage, /v3.15/);
+assert.equal(call('readUtilityForm'), null); assert.match(ctx.lastMessage, /v4.00/);
 ctx.devices.get('test').state.firmware = '4.00';
 
 // Measurement DEH explicitly selects its historical date and optional time.
@@ -176,7 +176,7 @@ ui.utilityTimeInput.value = '24:00'; assert.equal(call('readUtilityForm'), null)
 assert.equal(call('localDateInputValue', new Date('2026-10-04T21:02:00Z')), '2026-10-05');
 assert.equal(call('localTimeInputValue', new Date('2026-10-04T21:02:00Z')), '00:02');
 
-// Value-only E.K. editing keeps the original source timestamp and kind.
+// Value-only indication editing keeps the original source timestamp and kind.
 call('openUtilityEntry', monoEnd);
 assert.equal(ctx.editingUtilityId, 2); assert(ui.utilityKindFinal.disabled && ui.utilityKindIntermediate.disabled);
 assert.equal(call('readUtilityForm').commandTail, 'ek|mono|2026-10-04|20:46|70.10');
@@ -212,7 +212,7 @@ assert.equal(dom.get('brokerStatus').textContent, 'Αποσυνδεδεμένο'
 assert(dom.get('utilityTimeExact').handlers.has('change'));
 assert(dom.get('utilityTimeEstimated').handlers.has('change'));
 assert(dom.get('utilityEntryDialog').handlers.has('click'));
-console.log('PASS: signed PV replay (synthetic), frozen and matched net comparisons, missing/legacy/continuity guards, absolute I/E table, E.K./T.K. wizard, Athens rollover and timestamp-preserving edits');
+console.log('PASS: v4.00 indication/measurement split, signed PV comparisons, wizard, history guards and timestamp-preserving edits');
 
 assert(html.includes('Καταχώρηση Ένδειξης Μετρητή ΔΕΗ'));
 assert(html.includes('Καταχώρηση Μέτρησης ΔΕΗ'));
