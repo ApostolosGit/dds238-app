@@ -5,6 +5,9 @@ import { readFileSync } from "node:fs";
 const swSource = readFileSync(new URL("../sw.js", import.meta.url), "utf8");
 const html = readFileSync(new URL("../index.html", import.meta.url), "utf8");
 const resetHtml = readFileSync(new URL("../reset-app.html", import.meta.url), "utf8");
+const appSource = readFileSync(new URL("../app.js", import.meta.url), "utf8");
+const cacheName = swSource.match(/const CACHE_NAME = "([^"]+)"/)[1];
+const appVersion = appSource.match(/const APP_VERSION = "([^"]+)"/)[1];
 const base = "https://example.test/dds238-app/";
 const handlers = new Map(), deleted = [], navigated = [], fetchOptions = [], fetchedUrls = [];
 const entries = new Map();
@@ -31,7 +34,7 @@ const ctx = vm.createContext({
   },
   caches: {
     open: async () => cache,
-    keys: async () => ["energy-dds-jsy-pwa-v2.0.7", "energy-dds-jsy-pwa-v2.0.8-r2", "another-app-cache"],
+    keys: async () => ["energy-dds-jsy-pwa-v2.0.7", "energy-dds-jsy-pwa-v2.0.8-r2", cacheName, "another-app-cache"],
     delete: async (key) => deleted.push(key)
   },
   fetch: async (request, options) => {
@@ -67,13 +70,15 @@ for (const [, asset] of html.matchAll(/(?:src|href)="((?:app\.js|style\.css)[^"]
   assert(installed.some((request) => request.url === new URL(asset, base).href));
 }
 await lifecycle("activate");
-assert.deepEqual(deleted, ["energy-dds-jsy-pwa-v2.0.7"]);
+assert.deepEqual(deleted, ["energy-dds-jsy-pwa-v2.0.7", "energy-dds-jsy-pwa-v2.0.8-r2"]);
 assert.deepEqual(navigated, [base]);
 const asset = html.match(/src="(app\.js[^"]+)"/)[1];
 assert.equal(await (await request(asset)).text(), "fresh");
 assert.equal(fetchOptions.at(-1).cache, "no-store");
 assert.equal(await (await request("app.js?v=2.0.0")).text(), "fresh");
-assert.equal(fetchedUrls.at(-1), base + "app.js?v=2.0.8-r2");
+assert.equal(fetchedUrls.at(-1), base + asset);
+assert(appSource.includes('"./' + asset.replace('app.js', 'sw.js') + '"'));
+assert(html.includes('MQTT.app. v' + appVersion));
 offline = true;
 assert.equal(await (await request("app.js?v=2.0.0")).text(), "fresh");
 assert.equal(await (await request(asset)).text(), "fresh");
@@ -105,5 +110,7 @@ const resetCtx = vm.createContext({
 await vm.runInContext(resetScript, resetCtx);
 assert.deepEqual(unregistered, [base]);
 assert.deepEqual(cleared, ["energy-dds-jsy-pwa-v2.0.7"]);
-assert.match(redirected[0], /^\.\/\?app=2\.08&reset=\d+$/);
+const redirect = new URL(redirected[0], base);
+assert.equal(redirect.searchParams.get("app"), appVersion);
+assert.match(redirect.searchParams.get("reset"), /^\d+$/);
 console.log("PWA fresh assets, current-cache offline fallback, scoped cleanup and recovery PASS");

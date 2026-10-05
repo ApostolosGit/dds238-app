@@ -6,6 +6,7 @@ on:
     branches: [main]
     paths:
       - "app.js"
+      - "style.css"
       - "sw.js"
       - "index.html"
       - "reset-app.html"
@@ -33,8 +34,8 @@ jobs:
           for attempt in $(seq 1 10); do
             nonce="$(date +%s)-$attempt"
             ok=1
-            for f in index.html app.js sw.js reset-app.html; do
-              if ! curl -fsSL --connect-timeout 5 --max-time 8 -H 'Cache-Control: no-cache' "$BASE/$f?v=2.0.8-r2&check=$nonce" -o "live/$f"; then
+            for f in index.html app.js style.css sw.js reset-app.html; do
+              if ! curl -fsSL --connect-timeout 5 --max-time 8 -H 'Cache-Control: no-cache' "$BASE/$f?v=2.0.9&check=$nonce" -o "live/$f"; then
                 ok=0
                 continue
               fi
@@ -47,7 +48,7 @@ jobs:
               grep -n 'APP_VERSION =' live/app.js
               grep -n 'CACHE_NAME =' live/sw.js
               grep -nE 'MQTT.app. v|app.js.v=' live/index.html
-              sha256sum live/index.html live/app.js live/sw.js live/reset-app.html
+              sha256sum live/index.html live/app.js live/style.css live/sw.js live/reset-app.html
               exit 0
             fi
             echo "Waiting for current Pages deployment ($attempt/10)"
