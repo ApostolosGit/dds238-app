@@ -2,6 +2,7 @@ name: Utility reading checks
 on:
   pull_request:
     paths:
+      - "history.js"
       - "app.js"
       - "style.css"
       - "sw.js"
@@ -29,6 +30,8 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
+      - run: node tests/test_energy_history.mjs
+      - run: node --check history.js
       - run: node --check app.js
       - run: node --check sw.js
       - run: node tests/test_pwa_cache.mjs
