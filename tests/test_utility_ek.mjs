@@ -215,13 +215,13 @@ function addIds(markup) {
 addIds(html);
 const footer = [control(), control()];
 vm.runInNewContext(source, {
-  document: { getElementById: id => dom.get(id) || null,
-    createElement: () => control(), querySelectorAll: () => footer,
+  document: { body: { appendChild: node => addIds(node.innerHTML) }, getElementById: id => dom.get(id) || null,
+    createElement: () => ({ ...control(), addEventListener() {} }), querySelectorAll: () => footer,
     addEventListener() {} },
   window: { addEventListener() {} }, navigator: {},
   localStorage: { getItem: () => null }, setTimeout: () => 1, console
 });
-assert.equal(footer[0].textContent, 'MQTT.app. v2.12');
+assert.equal(footer[0].textContent, 'MQTT.app. v2.13');
 assert.equal(dom.get('brokerStatus').textContent, 'Αποσυνδεδεμένο');
 assert(dom.get('utilityTimeExact').handlers.has('change'));
 assert(dom.get('utilityTimeEstimated').handlers.has('change'));
@@ -240,3 +240,4 @@ assert(source.includes('tariffRow("Τελευταία ΔΕΗ", z2Ref, "kWh", "",
 assert(!source.includes('<th>Δ Ζ1</th>'));
 assert(!source.includes('<th>Δ Ζ2</th>'));
 assert(!source.includes('<th>Σύνολο Δ</th>'));
+
