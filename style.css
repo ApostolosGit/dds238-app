@@ -1345,3 +1345,10 @@ input:focus { border-color: #2b9c88; box-shadow: 0 0 0 3px rgba(43,156,136,.13);
 
 .meter-error { padding:16px; margin:10px 0; border:1px solid #d58636; border-radius:12px; background:#fff1df; color:#633b12; }
 .meter-error p { line-height:1.5; font-size:.85rem; }
+/* A live ESP can temporarily delay a sample without losing its last reading. */
+.measurement-notice {
+  margin: 0 0 12px;
+  color: #ffd27a;
+  font-size: .9rem;
+  line-height: 1.5;
+}

@@ -49,6 +49,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: app-ui-5-55
+          name: app-ui-5-56
           path: tests/ui-artifacts/*.png
           retention-days: 3
+

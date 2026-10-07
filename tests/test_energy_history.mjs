@@ -46,5 +46,5 @@ token=packets.at(-1).split('|')[1];feed(`B|${token}|1|1700000000|2072576|100000|
 assert($('energyHistoryMemory').textContent.includes('1972576'));assert($('energyHistoryPlot').innerHTML.includes('<svg'));assert($('energyHistoryTable').innerHTML.includes('Χωρίς δεδομένα'));
 // A missing packet retries the same offset, rather than claiming completion.
 context.loadEnergyHistory('test');token=packets.at(-1).split('|')[1];feed(`B|${token}|1|1700000000|2072576|100000|1972576|4000|3000|2000|0|1791302400`);feed(`E|${token}|-1|1`);assert.equal(packets.at(-1).split('|').at(-1),'0');assert.equal(context.historySession.retry,1);
-assert(code.includes('`${BASE}/+/admin/history`'));assert(fs.readFileSync(resolve(root,'sw.js'),'utf8').includes('./history.js?v=5.55'));assert(fs.readFileSync(resolve(root,'index.html'),'utf8').indexOf('history.js')<fs.readFileSync(resolve(root,'index.html'),'utf8').indexOf('app.js'));
+assert(code.includes('`${BASE}/+/admin/history`'));assert(fs.readFileSync(resolve(root,'sw.js'),'utf8').includes('./history.js?v=5.56'));assert(fs.readFileSync(resolve(root,'index.html'),'utf8').indexOf('history.js')<fs.readFileSync(resolve(root,'index.html'),'utf8').indexOf('app.js'));
 console.log('App V5 charts: three zones, signed net, missing days, mono mode, reset/gap handling, MQTT paging, stale frames, missing packet retry and precache PASS');
