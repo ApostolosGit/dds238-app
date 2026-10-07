@@ -5,6 +5,7 @@ on:
   push:
     branches: [main]
     paths:
+      - "history.js"
       - "app.js"
       - "style.css"
       - "sw.js"
@@ -34,8 +35,8 @@ jobs:
           for attempt in $(seq 1 10); do
             nonce="$(date +%s)-$attempt"
             ok=1
-            for f in index.html app.js style.css sw.js reset-app.html; do
-              if ! curl -fsSL --connect-timeout 5 --max-time 8 -H 'Cache-Control: no-cache' "$BASE/$f?v=2.0.9&check=$nonce" -o "live/$f"; then
+            for f in index.html app.js history.js style.css sw.js reset-app.html; do
+              if ! curl -fsSL --connect-timeout 5 --max-time 8 -H 'Cache-Control: no-cache' "$BASE/$f?check=$nonce" -o "live/$f"; then
                 ok=0
                 continue
               fi

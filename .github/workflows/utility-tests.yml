@@ -13,6 +13,7 @@ on:
   push:
     branches: [main]
     paths:
+      - "history.js"
       - "app.js"
       - "style.css"
       - "sw.js"
@@ -25,6 +26,7 @@ permissions:
 jobs:
   utility:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -37,3 +39,16 @@ jobs:
       - run: node --check sw.js
       - run: node tests/test_pwa_cache.mjs
       - run: node tests/test_utility_ek.mjs
+      - name: Install browser test runtime
+        run: |
+          timeout 120s npm install --no-save --ignore-scripts playwright@1.62.1
+          timeout 180s npx playwright install chromium
+      - name: Check actual desktop, mobile and bar labels
+        run: node tests/test_ui_browser.cjs
+      - name: Upload UI previews
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-ui-5-55
+          path: tests/ui-artifacts/*.png
+          retention-days: 3

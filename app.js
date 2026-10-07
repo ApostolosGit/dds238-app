@@ -17,14 +17,13 @@
     path: "/mqtt"
   };
 
-  const APP_VERSION = "2.14";
+  const APP_VERSION = "5.55";
   const AUTO_REFRESH_MS = 60000;
   const OTA_ACK_TIMEOUT_MS = 12000;
   const OTA_POLL_MS = 5000;
   const OTA_TOTAL_TIMEOUT_MS = 180000;
   const OTA_PIN = "12134";
   const OTA_MANIFEST_BASE_URL = "https://raw.githubusercontent.com/ApostolosGit/ESP8266-OTA/main/";
-  const OTA_RAW_BASE_URL = "https://raw.githubusercontent.com/ApostolosGit/ESP8266-OTA/main/";
   const devices = new Map();
   const csvBuffers = new Map();
   const adminBusy = new Set();
@@ -58,8 +57,6 @@
     metersDot: $("metersDot"),
     metersStatus: $("metersStatus"),
     updateAllBtn: $("updateAllBtn"),
-    updateAllIcon: $("updateAllIcon"),
-    updateAllText: $("updateAllText"),
     devicesGrid: $("devicesGrid"),
     emptyState: $("emptyState"),
     settingsBtn: $("settingsBtn"),
@@ -320,14 +317,6 @@
     return false;
   }
 
-  function metric(label, value, unit = "", extra = "") {
-    return `
-      <article class="metric-card ${extra}">
-        <span class="metric-label">${escapeHtml(label)}</span>
-        <strong>${escapeHtml(value)} ${unit ? `<small>${escapeHtml(unit)}</small>` : ""}</strong>
-      </article>`;
-  }
-
   function diffTone(value) {
     const n = Number(value);
     if (!Number.isFinite(n) || n === 0) return "diff-zero";
@@ -564,9 +553,9 @@
           <div class="device-head-right">
             <span class="rssi-badge">RSSI ${escapeHtml(rssi)}</span>
             <div class="device-actions">
-              <button class="small-btn refresh-device" type="button" data-action="refresh" data-device="${escapeHtml(device.id)}">↻ UPDATE</button>
-              <button class="small-btn ghost" type="button" data-action="history" data-device="${escapeHtml(device.id)}">ΓΡΑΦΗΜΑΤΑ</button>
               <button class="small-btn ghost" type="button" data-action="admin" data-device="${escapeHtml(device.id)}">ΡΥΘΜΙΣΕΙΣ</button>
+              <button class="small-btn" type="button" data-action="history" data-device="${escapeHtml(device.id)}">ΓΡΑΦΗΜΑΤΑ</button>
+              <button class="small-btn refresh-device" type="button" data-action="refresh" data-device="${escapeHtml(device.id)}">↻ UPDATE</button>
             </div>
           </div>
         </div>
@@ -611,6 +600,7 @@
 
   function requestUpdate(id, manual = true) {
     const device = ensureDevice(id);
+    if (!manual && device.responseTimer) return;
     clearTimeout(device.responseTimer);
     device.responseTimedOut = false;
     if (!publish(id, "request", "update", (err) => {
@@ -638,9 +628,7 @@
   }
 
   function scheduleAutoRefresh() {
-    clearInterval(autoRefreshTimer);
-    autoRefreshTimer = null;
-    if (!client || !client.connected) return;
+    if (!client || !client.connected || autoRefreshTimer !== null) return;
     autoRefreshTimer = setInterval(() => requestAll(false), AUTO_REFRESH_MS);
   }
 
@@ -654,11 +642,6 @@
   function localDateInputValue(date = new Date()) {
     const p = utilityLocalTimeParts(date);
     return `${p.year}-${p.month}-${p.day}`;
-  }
-
-  function localTimeInputValue(date = new Date()) {
-    const p = utilityLocalTimeParts(date);
-    return `${p.hour}:${p.minute}`;
   }
 
   function refreshDualZoneSettings(device) {
@@ -1043,7 +1026,7 @@
       `Αποστολή OTA ${fromVersion} → ${manifest.version}. Αναμονή επιβεβαίωσης από ESP8266…`
     );
 
-    const firmwareUrl = OTA_RAW_BASE_URL + encodeURIComponent(manifest.file);
+    const firmwareUrl = OTA_MANIFEST_BASE_URL + encodeURIComponent(manifest.file);
     const command =
       `ota_https|${manifest.size}|${manifest.md5}|${firmwareUrl}`;
 
@@ -1761,10 +1744,6 @@
     return calculate();
   }
 
-  function utilityDeviation(previous, row) {
-    return utilityDeviationResult(previous, row).value;
-  }
-
   function deviationText(value) {
     if (!Number.isFinite(value)) return "—";
     return `${value > 0 ? "+" : ""}${formatNumber(value, 2)}%`;
@@ -1801,15 +1780,14 @@
     return `<small class="utility-point-label">${escapeHtml(label)}</small>`;
   }
 
-  function utilityCanDelete(row) {
+  function utilityCanDelete(row, latestId = utilityHistoryRows.reduce((max, item) =>
+    item.kind === "ek" ? Math.max(max, item.id) : max, 0)) {
     if (row.kind !== "ek") return true;
-    const latestId = utilityHistoryRows.reduce((max, item) =>
-      item.kind === "ek" ? Math.max(max, item.id) : max, 0);
     return row.id === latestId && row.canDelete !== false;
   }
 
-  function utilityActionButtons(row, currentMode, firmware) {
-    const canDelete = utilityCanDelete(row);
+  function utilityActionButtons(row, currentMode, firmware, latestId) {
+    const canDelete = utilityCanDelete(row, latestId);
     const canEdit = row.mode === currentMode && firmwareAtLeast(firmware, 4, 0);
     return `
       <div class="history-actions">
@@ -1865,6 +1843,8 @@
     const monoRows = utilityHistoryRows.filter((row) => row.mode === "mono");
     const dualRows = utilityHistoryRows.filter((row) => row.mode === "dual");
     const sections = [];
+    const latestId = utilityHistoryRows.reduce((max, row) =>
+      row.kind === "ek" ? Math.max(max, row.id) : max, 0);
 
     if (monoRows.length) {
       let previousIndication = null;
@@ -1877,7 +1857,7 @@
             <td>${formatNumber(row.z, readingDigits)}</td>
             ${utilityInternalCounterCell(row, "z")}
             ${utilityDeviationCell(previousIndication, row)}
-            <td>${utilityActionButtons(row, currentMode, firmware)}</td>
+            <td>${utilityActionButtons(row, currentMode, firmware, latestId)}</td>
           </tr>`;
         if (row.kind === "ek") previousIndication = row;
         return html;
@@ -1906,7 +1886,7 @@
             <td>${formatNumber(row.z2, readingDigits)}</td>
             ${utilityInternalCounterCell(row, "z2")}
             ${utilityDeviationCell(previousIndication, row)}
-            <td>${utilityActionButtons(row, currentMode, firmware)}</td>
+            <td>${utilityActionButtons(row, currentMode, firmware, latestId)}</td>
           </tr>`;
         if (row.kind === "ek") previousIndication = row;
         return html;
@@ -2593,7 +2573,7 @@
     });
 
     window.addEventListener("load", () => {
-      navigator.serviceWorker.register("./sw.js?v=2.0.14", { updateViaCache: "none" })
+      navigator.serviceWorker.register("./sw.js?v=5.55", { updateViaCache: "none" })
         .then((registration) => {
           const checkForAppUpdate = () => {
             registration.update().catch((err) => {

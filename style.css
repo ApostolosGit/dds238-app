@@ -162,6 +162,7 @@ h3 { margin: 0; font-size: .88rem; }
   margin-bottom: 10px;
 }
 .device-title-wrap { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.device-title-wrap > div { min-width: 0; }
 .device-title-wrap h2 { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .device-id {
   display: block;
@@ -182,53 +183,10 @@ h3 { margin: 0; font-size: .88rem; }
   border: 1px solid var(--line);
 }
 
-.metric-card,
-.phase-card,
-.info-card {
+.phase-card {
   border: 1px solid var(--line);
   background: linear-gradient(145deg, rgba(18,34,53,.96), rgba(10,24,37,.96));
 }
-.metric-label {
-  display: block;
-  color: var(--muted);
-  font-size: .64rem;
-  margin-bottom: 4px;
-  line-height: 1.1;
-}
-.metric-card small {
-  color: var(--muted);
-  font-size: .43em;
-  font-weight: 700;
-}
-.metrics-grid,
-.energy-grid,
-.jsy-summary-grid {
-  display: grid;
-  gap: 6px;
-}
-.metrics-grid { grid-template-columns: repeat(5, minmax(0, 1fr)); }
-.energy-grid { grid-template-columns: repeat(5, minmax(0, 1fr)); }
-.jsy-summary-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
-.compact-four { grid-template-columns: repeat(4, minmax(0, 1fr)); }
-
-.metric-card {
-  border-radius: 13px;
-  padding: 10px 9px;
-  min-height: 78px;
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  min-width: 0;
-}
-.metric-card strong {
-  font-size: clamp(1rem, 2.3vw, 1.5rem);
-  letter-spacing: -.035em;
-  white-space: nowrap;
-  line-height: 1.05;
-}
-.diff-card strong,
-.accent-card strong { color: var(--accent); }
-.reverse-card strong { color: var(--reverse); }
 
 .energy-section { display: grid; gap: 6px; margin-top: 10px; }
 .section-title-row {
@@ -504,27 +462,20 @@ input:focus { border-color: #2b9c88; box-shadow: 0 0 0 3px rgba(43,156,136,.13);
   font-size: .82rem;
 }
 
-@media (max-width: 980px) {
-  .metrics-grid,
-  .energy-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-  .jsy-summary-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-}
+
 
 @media (max-width: 620px) {
   .app-shell { padding-left: 7px; padding-right: 7px; }
   .devices-grid { grid-template-columns: 1fr; gap: 8px; }
   .device-panel { padding: 9px; border-radius: 16px; }
-  .device-head { align-items: flex-start; }
+  .device-head { display: grid; grid-template-columns: minmax(0, 1fr); align-items: flex-start; }
+  .device-head-right { width:100%; justify-items:end; }
   .device-actions { gap: 4px; }
   .small-btn { padding: 7px 7px; font-size: .57rem; }
-  .metrics-grid,
-  .energy-grid,
-  .jsy-summary-grid,
-  .compact-four { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 5px; }
+
   .phases-grid { grid-template-columns: 1fr; gap: 5px; }
   .phase-card { padding: 9px 10px; }
-  .metric-card { min-height: 68px; padding: 9px 8px; }
-  .metric-card strong { font-size: 1.15rem; }
+
   .form-grid { grid-template-columns: 1fr; gap: 0; }
   #installBtn { display: none !important; }
   footer { display: none; }
@@ -538,7 +489,6 @@ input:focus { border-color: #2b9c88; box-shadow: 0 0 0 3px rgba(43,156,136,.13);
   .device-actions { width: 100%; }
   .device-actions .small-btn { flex: 1; }
 }
-
 
 /* ===== Διζωνικό Ζ1 / Ζ2 ===== */
 .settings-section {
@@ -644,7 +594,6 @@ input:focus { border-color: #2b9c88; box-shadow: 0 0 0 3px rgba(43,156,136,.13);
   .tariff-grid { grid-template-columns: 1fr 1fr; }
 }
 
-
 /* ===== Energy DDS / JSY v1.2 compact meter layout ===== */
 .device-head-right {
   display: grid;
@@ -665,9 +614,7 @@ input:focus { border-color: #2b9c88; box-shadow: 0 0 0 3px rgba(43,156,136,.13);
   font-weight: 800;
   white-space: nowrap;
 }
-.compact-jsy-summary {
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-}
+
 .power-positive strong,
 .power-positive .phase-value {
   color: var(--bad);
@@ -797,11 +744,7 @@ input:focus { border-color: #2b9c88; box-shadow: 0 0 0 3px rgba(43,156,136,.13);
   border-top: 0;
 }
 
-@media (max-width: 980px) {
-  .compact-jsy-summary {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-  }
-}
+
 
 @media (max-width: 620px) {
   .device-head-right {
@@ -810,9 +753,7 @@ input:focus { border-color: #2b9c88; box-shadow: 0 0 0 3px rgba(43,156,136,.13);
   .rssi-badge {
     font-size: .58rem;
   }
-  .compact-jsy-summary {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-  }
+  
   .phase-card {
     padding: 9px 10px;
   }
@@ -832,7 +773,7 @@ input:focus { border-color: #2b9c88; box-shadow: 0 0 0 3px rgba(43,156,136,.13);
 
 @media (max-width: 390px) {
   .device-head {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
   }
   .device-head-right {
     width: 100%;
@@ -859,15 +800,8 @@ input:focus { border-color: #2b9c88; box-shadow: 0 0 0 3px rgba(43,156,136,.13);
   .phase-power-row .phase-value { font-size: 1.38rem; }
 }
 
-
 /* ===== Energy DDS / JSY v1.3 ===== */
-.single-jsy-summary {
-  grid-template-columns: 1fr;
-  margin-bottom: 8px;
-}
-.single-jsy-summary .metric-card {
-  min-height: 72px;
-}
+
 .phases-without-title {
   margin-top: 0;
 }
@@ -891,9 +825,7 @@ input:focus { border-color: #2b9c88; box-shadow: 0 0 0 3px rgba(43,156,136,.13);
 }
 
 @media (max-width: 620px) {
-  .single-jsy-summary {
-    grid-template-columns: 1fr;
-  }
+
   .tariff-row-value {
     font-size: 1.2rem;
   }
@@ -901,7 +833,6 @@ input:focus { border-color: #2b9c88; box-shadow: 0 0 0 3px rgba(43,156,136,.13);
     grid-template-columns: 1fr;
   }
 }
-
 
 /* ===== Energy DDS / JSY v1.4 ===== */
 .diff-positive .tariff-row-value {
@@ -970,7 +901,6 @@ input:focus { border-color: #2b9c88; box-shadow: 0 0 0 3px rgba(43,156,136,.13);
   }
 }
 
-
 /* ===== Energy DDS / JSY v1.6 ===== */
 .device-title-line {
   display: flex;
@@ -980,9 +910,10 @@ input:focus { border-color: #2b9c88; box-shadow: 0 0 0 3px rgba(43,156,136,.13);
   white-space: nowrap;
 }
 .device-title-line h2 {
-  flex: 0 0 auto;
-  overflow: visible;
-  text-overflow: clip;
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .device-title-line .device-total-power {
   margin-top: 0;
@@ -1033,7 +964,6 @@ input:focus { border-color: #2b9c88; box-shadow: 0 0 0 3px rgba(43,156,136,.13);
     font-size: 1.08rem;
   }
 }
-
 
 /* ===== Energy DDS / JSY v1.7 ===== */
 .single-phase-card {
@@ -1162,7 +1092,6 @@ input:focus { border-color: #2b9c88; box-shadow: 0 0 0 3px rgba(43,156,136,.13);
   }
 }
 
-
 /* ===== v2.0 Utility reading history ===== */
 .utility-history-dialog { max-width: 880px; }
 .utility-history-content h3 { margin: 18px 0 10px; }
@@ -1207,7 +1136,6 @@ input:focus { border-color: #2b9c88; box-shadow: 0 0 0 3px rgba(43,156,136,.13);
   .utility-history-dialog { width: calc(100% - 14px); }
   .utility-history-table { min-width: 650px; }
 }
-
 
 /* ===== v2.03 T.K. / E.K. guided readings ===== */
 .utility-latest-summary {
@@ -1378,7 +1306,6 @@ input:focus { border-color: #2b9c88; box-shadow: 0 0 0 3px rgba(43,156,136,.13);
   }
 }
 
-
 /* ===== MQTT.app. v2.06 meter type + OTA availability ===== */
 .meter-type-settings h3 {
   margin: 2px 0 4px;
@@ -1407,7 +1334,6 @@ input:focus { border-color: #2b9c88; box-shadow: 0 0 0 3px rgba(43,156,136,.13);
 @media (prefers-reduced-motion: reduce) {
   .ota-new-blink { animation: none; }
 }
-
 
 /* V5 history */
 .energy-history-dialog { width:calc(100% - 24px); max-width:1100px; color:#142431; }

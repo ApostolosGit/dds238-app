@@ -35,6 +35,15 @@ let rendered=b.dom.get('devicesGrid').innerHTML;
 assert(rendered.includes('Σφάλμα μετρητή DDS238'));assert(rendered.includes(dds1)&&rendered.includes(dds2)&&rendered.includes(jsy));assert.equal(b.dom.get('metersStatus').textContent,'3');
 message(dds1,'state','null');assert(b.dom.get('devicesGrid').innerHTML.includes(jsy));assert.equal(b.app.devices.get(jsy).state.power_total,690);
 message(dds1,'state','{bad-json');assert.equal(b.app.devices.size,3);
+// Repeated polling keeps one interval and preserves a pending response deadline.
+const refreshIntervals=b.intervals.size;
+b.app.requestAll(false);const pending=b.app.devices.get(dds2).responseTimer;
+const sentBefore=c.published.length;b.app.requestAll(false);
+assert.equal(b.app.devices.get(dds2).responseTimer,pending);
+assert.equal(c.published.length,sentBefore);assert.equal(b.intervals.size,refreshIntervals);
+message(dds2,'state',{meter:'DDS238',firmware:'5.55',power:230});
+message(jsy,'state',{meter:'JSY-MK-333',firmware:'5.55',power_total:690});
+message(dds1,'health',health('DDS238',false));
 // A failed request and a slow response affect only that device.
 c.throwId=dds1;b.app.requestAll(false);assert(c.published.some(p=>p.t.includes('/'+dds2+'/request')));assert(c.published.some(p=>p.t.includes('/'+jsy+'/request')));c.throwId=null;
 b.app.requestUpdate(dds1,false);let timeout=b.app.devices.get(dds1).responseTimer;b.timers.get(timeout).f();assert(b.app.devices.get(dds1).responseTimedOut);assert(!b.app.devices.get(jsy).responseTimedOut);
