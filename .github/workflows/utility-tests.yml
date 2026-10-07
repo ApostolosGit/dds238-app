@@ -26,6 +26,7 @@ permissions:
 jobs:
   utility:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -40,8 +41,8 @@ jobs:
       - run: node tests/test_utility_ek.mjs
       - name: Install browser test runtime
         run: |
-          npm install --no-save --ignore-scripts playwright@1.62.1
-          npx playwright install --with-deps chromium
+          timeout 120s npm install --no-save --ignore-scripts playwright@1.62.1
+          timeout 180s npx playwright install chromium
       - name: Check actual desktop, mobile and bar labels
         run: node tests/test_ui_browser.cjs
       - name: Upload UI previews
