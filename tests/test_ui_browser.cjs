@@ -18,6 +18,7 @@ const server=http.createServer((req,res)=>{
  const page=await browser.newPage({viewport:{width:1280,height:850}});
  await page.route('**/*',r=>new URL(r.request().url()).hostname==='127.0.0.1'?r.continue():r.abort());
  await page.goto(`http://127.0.0.1:${server.address().port}/`);
+ await page.locator('#settingsDialog').waitFor({state:'visible'});
  await page.evaluate(()=>{
   for(const dialog of document.querySelectorAll('dialog[open]')) dialog.close();
   testApp.devices.set('jsy_house-18FE34123456',{id:'jsy_house-18FE34123456',online:true,sampleReceived:true,lastReceived:new Date(),state:{meter:'JSY-MK-333',firmware:'5.55',dual_zone:true,rssi:-45,v1:231,v2:232,v3:230,i1:2,i2:1,i3:3,p1:400,p2:-200,p3:600,power_total:800,pf1:.9,pf2:.9,pf3:.9,frequency:50}});
@@ -35,6 +36,7 @@ const server=http.createServer((req,res)=>{
  await page.setViewportSize({width:1000,height:650});
  await page.evaluate(()=>{
   const dialog=document.querySelector('.energy-history-dialog');dialog.showModal();
+  document.getElementById('energyHistoryRange').value='7';
   document.getElementById('energyHistoryPlot').innerHTML=EnergyHistory.svg([
    {label:'01/10',values:[5.25,-3.125,0],flags:0},
    {label:'02/10',values:[3.96,-6.94,1.5],flags:1},
