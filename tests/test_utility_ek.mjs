@@ -38,16 +38,17 @@ const ctx = vm.createContext({ utilityHistoryRows: [], adminTargetId: 'test',
   setAdminStatus(message) { ctx.lastMessage = message; } });
 vm.runInContext(minimumDeclaration + '\n' + [
   'escapeHtml', 'formatNumber', 'firmwareAtLeast', 'utilitySortTime', 'parseUtilityHistoryRows',
-  'utilityDeviationResult', 'utilityDeviation', 'deviationText', 'utilityDeviationCell',
+  'utilityDeviationResult', 'deviationText', 'utilityDeviationCell',
   'utilityInternalCounterCell', 'utilityPointLabel', 'formatUtilityDate', 'utilityDateTimeLabel',
   'utilityKindBadge', 'utilityCanDelete', 'utilityActionButtons', 'renderUtilityHistory',
-  'utilityLocalTimeParts', 'localDateInputValue', 'localTimeInputValue', 'utilityCurrentDual',
+  'utilityLocalTimeParts', 'localDateInputValue', 'utilityCurrentDual',
   'utilityKindValue', 'resetUtilityEditor', 'utilityEntrySteps', 'utilityEntryAdjacentStep',
   'updateUtilityTimeMode', 'setUtilityEntryStep', 'updateUtilityReadingMode', 'openUtilityEntry',
   'utilityStepValid', 'readUtilityForm', 'prepareUtilityConfirmation'
 ].map(fn).join('\n'), ctx);
 assert.equal(vm.runInContext('MIN_DEVIATION_KWH', ctx), 1.0);
 const call = (name, ...args) => ctx[name](...args);
+const deviation = (...args) => ctx.utilityDeviationResult(...args).value;
 const near = (actual, expected) => assert(Math.abs(actual - expected) < 1e-7, `${actual} vs ${expected}`);
 const header = 'ID,Date,Mode,Kind,Z,Z1,Z2,TimeToken,Mapped,Anchor,AnchorZ1,AnchorZ2,EKFlags,PredictedWh,ActualWh,CanDelete,NetSnapshot,PointEpoch,PointSource,InternalImport,InternalExport,Z1Import,Z1Export,Z2Import,Z2Export,Generation,SampleEpoch';
 
@@ -62,27 +63,27 @@ const rows = call('parseUtilityHistoryRows', [header,
 assert.equal(rows.map(row => row.id).join(','), '1,2');
 near(rows[1].z1 - rows[0].z1, -6.3); near(rows[1].z2 - rows[0].z2, -23.6);
 assert.equal(rows[1].netSnapshot, true); assert.equal(rows[1].sampleEpoch, endEpoch);
-assert.equal(call('utilityDeviation', rows[0], rows[1]), 0);
+assert.equal(deviation(rows[0], rows[1]), 0);
 const previousIndication = { ...rows[0], kind: 'ek' };
 const raw = call('utilityDeviationResult', previousIndication, { ...rows[1], netSnapshot: false });
 near(raw.actualKwh, -29.9); near(raw.espKwh, -29.9); near(raw.value, 0);
-assert.equal(call('utilityDeviation', null, rows[1]), 0);
-assert.equal(call('utilityDeviation', { z: 999 }, rows[1]), 0);
-near(call('utilityDeviation', null, { ...rows[1], predictedWh: -30000 }), -100 / 299);
-near(call('utilityDeviation', null, { ...rows[1], predictedWh: 2000, actualWh: 1500 }), 100 / 3);
-assert.equal(call('utilityDeviation', null, { ...rows[1], predictedWh: 0, actualWh: 1000 }), -100);
-assert.equal(call('utilityDeviation', null, { ...rows[1], predictedWh: 0, actualWh: -1000 }), 100);
-assert.equal(call('utilityDeviation', null, { ...rows[1], actualWh: -999 }), null);
-assert.equal(call('utilityDeviation', null, { ...rows[1], actualWh: 999 }), null);
-assert.equal(call('utilityDeviation', null, { ...rows[1], actualWh: 0 }), null);
-assert.equal(call('utilityDeviation', null, { ...rows[1], predictedWh: NaN }), null);
+assert.equal(deviation(null, rows[1]), 0);
+assert.equal(deviation({ z: 999 }, rows[1]), 0);
+near(deviation(null, { ...rows[1], predictedWh: -30000 }), -100 / 299);
+near(deviation(null, { ...rows[1], predictedWh: 2000, actualWh: 1500 }), 100 / 3);
+assert.equal(deviation(null, { ...rows[1], predictedWh: 0, actualWh: 1000 }), -100);
+assert.equal(deviation(null, { ...rows[1], predictedWh: 0, actualWh: -1000 }), 100);
+assert.equal(deviation(null, { ...rows[1], actualWh: -999 }), null);
+assert.equal(deviation(null, { ...rows[1], actualWh: 999 }), null);
+assert.equal(deviation(null, { ...rows[1], actualWh: 0 }), null);
+assert.equal(deviation(null, { ...rows[1], predictedWh: NaN }), null);
 assert.match(call('utilityDeviationResult', null, { ...rows[1], ekFlags: 5 }).reason, /Δεν υπάρχει πλήρης βάση/);
 assert.match(call('utilityDeviationResult', null, { ...rows[1], ekFlags: 13 }).reason, /Μηδενικό/);
 assert.match(call('utilityDeviationResult', previousIndication, { ...rows[1], netSnapshot: false, generation: 2 }).reason, /Διακοπή συνέχειας/);
-assert.equal(call('utilityDeviation', previousIndication, { ...rows[1], netSnapshot: false, pointEpoch: startEpoch - 1 }), null);
-assert.equal(call('utilityDeviation', previousIndication, { ...rows[1], netSnapshot: false, z1Import: 59 }), null);
-assert.equal(call('utilityDeviation', previousIndication, { ...rows[1], netSnapshot: false, z2Export: NaN }), null);
-assert.equal(call('utilityDeviation', { ...previousIndication, mode: 'mono' }, { ...rows[1], netSnapshot: false }), null);
+assert.equal(deviation(previousIndication, { ...rows[1], netSnapshot: false, pointEpoch: startEpoch - 1 }), null);
+assert.equal(deviation(previousIndication, { ...rows[1], netSnapshot: false, z1Import: 59 }), null);
+assert.equal(deviation(previousIndication, { ...rows[1], netSnapshot: false, z2Export: NaN }), null);
+assert.equal(deviation({ ...previousIndication, mode: 'mono' }, { ...rows[1], netSnapshot: false }), null);
 const measurementOnly = call('utilityDeviationResult', null, rows[0]);
 assert.equal(measurementOnly.value, null);
 assert.match(measurementOnly.reason, /Μέτρηση ΔΕΗ/);
@@ -92,7 +93,7 @@ const legacy = call('parseUtilityHistoryRows', [
   '2,2026-10-04,mono,ek,101.5,0,0,11:00,1,12,0,0,15,2000,1500,1'
 ]);
 assert.equal(legacy[1].netSnapshot, false);
-assert.equal(call('utilityDeviation', legacy[0], legacy[1]), null);
+assert.equal(deviation(legacy[0], legacy[1]), null);
 assert.match(call('utilityDeviationResult', legacy[0], legacy[1]).reason, /προηγούμενη Καταχώρηση Ένδειξης/);
 const oldCell = call('utilityInternalCounterCell', legacy[1], 'z');
 assert.match(oldCell, /<b>—<\/b>/); assert(!oldCell.includes('12,000'));
@@ -101,7 +102,7 @@ assert.match(measurementCell, /<b>—<\/b>/);
 const old = call('parseUtilityHistoryRows', ['1,2026-10-04,mono,100,0,0,window']);
 assert.equal(old[0].kind, 'tk'); assert(!old[0].mapped);
 const invalidMetadata = { ...rows[1], pointSource: 0, netSnapshot: false, internalImport: 0, internalExport: 0 };
-assert.equal(call('utilityDeviation', rows[0], invalidMetadata), null);
+assert.equal(deviation(rows[0], invalidMetadata), null);
 assert.match(call('utilityInternalCounterCell', invalidMetadata, 'z'), /<b>—<\/b>/);
 
 ctx.utilityHistoryRows = rows;
@@ -135,7 +136,7 @@ ctx.devices.set('test', { state: { firmware: '4.00' } });
 const monoStart = { ...rows[0], kind: 'ek', mode: 'mono', z: 100 };
 const monoEnd = { ...rows[1], mode: 'mono', z: 70.1, netSnapshot: false };
 ctx.utilityHistoryRows = [monoStart, monoEnd];
-near(call('utilityDeviation', monoStart, monoEnd), 0);
+near(deviation(monoStart, monoEnd), 0);
 call('renderUtilityHistory', 'test');
 rendered = ui.utilityHistoryContent.innerHTML;
 assert.match(rendered, /ESP Ζ \(Ι−Ε\)/); assert.match(rendered, /0,00%/);
@@ -188,7 +189,8 @@ ui.utilityZInput.value = '100';
 assert(call('prepareUtilityConfirmation')); assert.match(ui.utilityConfirmSummary.innerHTML, /17:45/);
 ui.utilityTimeInput.value = '24:00'; assert.equal(call('readUtilityForm'), null);
 assert.equal(call('localDateInputValue', new Date('2026-10-04T21:02:00Z')), '2026-10-05');
-assert.equal(call('localTimeInputValue', new Date('2026-10-04T21:02:00Z')), '00:02');
+assert.equal(call('utilityLocalTimeParts', new Date('2026-10-04T21:02:00Z')).hour, '00');
+assert.equal(call('utilityLocalTimeParts', new Date('2026-10-04T21:02:00Z')).minute, '02');
 
 // Value-only indication editing keeps the original source timestamp and kind.
 call('openUtilityEntry', monoEnd);
@@ -221,7 +223,7 @@ vm.runInNewContext(source, {
   window: { addEventListener() {} }, navigator: {},
   localStorage: { getItem: () => null }, setTimeout: () => 1, console
 });
-assert.equal(footer[0].textContent, 'MQTT.app. v2.14');
+assert.equal(footer[0].textContent, 'MQTT.app. v5.55');
 assert.equal(dom.get('brokerStatus').textContent, 'Αποσυνδεδεμένο');
 assert(dom.get('utilityTimeExact').handlers.has('change'));
 assert(dom.get('utilityTimeEstimated').handlers.has('change'));
