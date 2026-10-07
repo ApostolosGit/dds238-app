@@ -1416,3 +1416,6 @@ input:focus { border-color: #2b9c88; box-shadow: 0 0 0 3px rgba(43,156,136,.13);
 .energy-history-plot svg { display:block; width:100%; height:300px; }
 #energyHistoryMemory { font-size:.8rem; line-height:1.5; margin:12px 0; }
 .device-actions { flex-wrap:wrap; }
+
+.meter-error { padding:16px; margin:10px 0; border:1px solid #d58636; border-radius:12px; background:#fff1df; color:#633b12; }
+.meter-error p { line-height:1.5; font-size:.85rem; }

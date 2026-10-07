@@ -221,7 +221,7 @@ vm.runInNewContext(source, {
   window: { addEventListener() {} }, navigator: {},
   localStorage: { getItem: () => null }, setTimeout: () => 1, console
 });
-assert.equal(footer[0].textContent, 'MQTT.app. v2.13');
+assert.equal(footer[0].textContent, 'MQTT.app. v2.14');
 assert.equal(dom.get('brokerStatus').textContent, 'Αποσυνδεδεμένο');
 assert(dom.get('utilityTimeExact').handlers.has('change'));
 assert(dom.get('utilityTimeEstimated').handlers.has('change'));

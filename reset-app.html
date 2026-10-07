@@ -33,7 +33,8 @@
   } catch (err) {
     console.warn("Reset cleanup warning", err);
   }
-  location.replace("./?app=2.13&reset=" + Date.now());
+  try { sessionStorage.removeItem("energy.mqtt.tab-session"); } catch (_) {}
+  location.replace("./?app=2.14&reset=" + Date.now());
 })();
 </script>
 </body>

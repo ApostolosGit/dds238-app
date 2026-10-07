@@ -1,12 +1,12 @@
-const CACHE_NAME = "energy-dds-jsy-pwa-v2.0.13";
+const CACHE_NAME = "energy-dds-jsy-pwa-v2.0.14";
 const CACHE_PREFIX = "energy-dds-jsy-pwa-";
 const APP_SCOPE = new URL("./", self.location.href).href;
 const APP_SHELL = [
   "./",
   "./index.html",
-  "./style.css?v=2.0.13",
-  "./app.js?v=2.0.13",
-  "./history.js?v=2.0.13",
+  "./style.css?v=2.0.14",
+  "./app.js?v=2.0.14",
+  "./history.js?v=2.0.14",
   "./manifest.webmanifest",
   "./icon-192.png",
   "./icon-512.png"
@@ -31,16 +31,7 @@ self.addEventListener("activate", (event) => {
     );
     await Promise.all(oldAppKeys.map((key) => caches.delete(key)));
     await self.clients.claim();
-    if (oldAppKeys.length) {
-      const windows = await self.clients.matchAll({
-        type: "window",
-        includeUncontrolled: true
-      });
-      await Promise.all(
-        windows.filter((client) => client.url.startsWith(APP_SCOPE))
-          .map((client) => client.navigate(client.url).catch(() => null))
-      );
-    }
+
   })());
 });
 
@@ -55,7 +46,7 @@ self.addEventListener("fetch", (event) => {
   let resource = event.request;
   if (["app.js", "style.css", "history.js"].some((file) => url.pathname === new URL(file, APP_SCOPE).pathname)) {
     // Older cached HTML may still request ?v=2.0.0; serve the current asset URL.
-    url.search = "?v=2.0.13";
+    url.search = "?v=2.0.14";
     resource = new Request(url.href, { cache: "no-store" });
   }
   event.respondWith((async () => {
