@@ -9,7 +9,7 @@ const server=http.createServer((req,res)=>{
  if(!fs.existsSync(full)){res.writeHead(404);res.end();return;}
  let content=fs.readFileSync(full);
  if(file==='index.html') content=Buffer.from(content.toString().replace(/<script[^>]+src="https:[^>]+><\/script>/g,''));
- if(file==='app.js') content=Buffer.from(content.toString().replace(/\}\)\(\);\s*$/,'window.testApp={devices,renderAll};})();'));
+ if(file==='app.js') content=Buffer.from(content.toString().replace(/\}\)\(\);\s*$/,'window.testApp={devices,renderAll,connect};})();'));
  res.setHeader('Content-Type',file.endsWith('.css')?'text/css':file.endsWith('.js')?'text/javascript':'text/html');res.end(content);
 });
 (async()=>{
@@ -21,11 +21,27 @@ const server=http.createServer((req,res)=>{
  await page.locator('#settingsDialog').waitFor({state:'visible'});
  await page.evaluate(()=>{
   for(const dialog of document.querySelectorAll('dialog[open]')) dialog.close();
-  testApp.devices.set('jsy_house-18FE34123456',{id:'jsy_house-18FE34123456',online:true,sampleReceived:true,lastReceived:new Date(),state:{meter:'JSY-MK-333',firmware:'5.55',dual_zone:true,rssi:-45,v1:231,v2:232,v3:230,i1:2,i2:1,i3:3,p1:400,p2:-200,p3:600,power_total:800,pf1:.9,pf2:.9,pf3:.9,frequency:50}});
-  testApp.renderAll();
+  window.mqtt={connect(){const handlers=new Map();const c={connected:false,on:(e,f)=>handlers.set(e,f),
+   subscribe(_t,_o,cb){cb(null,[{qos:0}]);},publish(_t,_p,_o,cb){cb?.(null);},end(){c.connected=false;},
+   emit(e,...args){if(e==='connect')c.connected=true;handlers.get(e)?.(...args);}};window.mockClient=c;return c;}};
+  testApp.connect({host:'fixture.example',port:'8884',path:'/mqtt',username:'fixture',password:'test-only'});
+  mockClient.emit('connect');
+  window.frame=(id,suffix,payload,retain=false)=>mockClient.emit('message',`home/energy/${id}/${suffix}`,{toString:()=>typeof payload==='string'?payload:JSON.stringify(payload)},{retain});
+  frame('jsy_house','status','online',true);
+  frame('jsy_house-84F3EB041E89','status','online',true);
+  frame('jsy_house-84F3EB041E89','state',{meter:'JSY-MK-333',firmware:'5.56',dual_zone:true,rssi:-45,v1:231,v2:232,v3:230,i1:2,i2:1,i3:3,p1:400,p2:-200,p3:600,power_total:800,pf1:.9,pf2:.9,pf3:.9,frequency:50});
+  frame('DDS-5CCF7FF0904F','state',{meter:'DDS238',firmware:'5.56',dual_zone:false,rssi:-46,power:23,current:.35,voltage:236,frequency:49.99,pf:.283});
  });
- assert.deepEqual(await page.locator('.device-actions button').evaluateAll(bs=>bs.map(b=>b.dataset.action)),['admin','history','refresh']);
- const colors=await page.locator('.device-actions button').evaluateAll(bs=>bs.map(b=>({bg:getComputedStyle(b).backgroundColor,fg:getComputedStyle(b).color})));
+ assert.equal(await page.locator('#metersStatus').textContent(),'2');
+ assert.equal(await page.locator('article[data-device="jsy_house"]').count(),0,'Retired retained ID must not appear in the real DOM');
+ assert.equal(await page.locator('.meter-error').count(),0);
+ await page.evaluate(()=>frame('jsy_house','state',{meter:'JSY-MK-333',firmware:'5.00',power_total:123}));
+ assert.equal(await page.locator('#metersStatus').textContent(),'3');
+ await page.evaluate(()=>frame('jsy_house','status','offline'));
+ assert.equal(await page.locator('#metersStatus').textContent(),'2');
+ const firstActions=page.locator('.device-actions').first();
+ assert.deepEqual(await firstActions.locator('button').evaluateAll(bs=>bs.map(b=>b.dataset.action)),['admin','history','refresh']);
+ const colors=await firstActions.locator('button').evaluateAll(bs=>bs.map(b=>({bg:getComputedStyle(b).backgroundColor,fg:getComputedStyle(b).color})));
  assert.deepEqual(colors[1],colors[2]);assert.notEqual(colors[0].bg,colors[2].bg);
  await page.screenshot({path:path.join(artifacts,'desktop.png')});
  await page.setViewportSize({width:390,height:850});
@@ -55,5 +71,5 @@ const server=http.createServer((req,res)=>{
  for(const label of geometry) assert(label.top>=0&&label.bottom<label.barTop,'Value must fit above its bar: '+label.number);
  for(let i=1;i<geometry.length;i++) assert(geometry[i-1].right<geometry[i].left,'Value labels must not overlap');
  await page.screenshot({path:path.join(artifacts,'chart.png')});
- await browser.close();server.close();console.log('Real-browser desktop/mobile buttons, no mobile overflow, 18 signed bar labels above bars with no clipping/overlap PASS');
+ await browser.close();server.close();console.log('Real-browser retained ghost vs two live meters, legacy site recovery, desktop/mobile buttons, no mobile overflow, 18 signed bar labels above bars PASS');
 })().catch(e=>{console.error(e);server.close();process.exit(1);});
