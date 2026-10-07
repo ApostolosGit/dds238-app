@@ -28,8 +28,10 @@ const server=http.createServer((req,res)=>{
  assert.deepEqual(colors[1],colors[2]);assert.notEqual(colors[0].bg,colors[2].bg);
  await page.screenshot({path:path.join(artifacts,'desktop.png')});
  await page.setViewportSize({width:390,height:850});
- assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),'App must not overflow on mobile');
  await page.screenshot({path:path.join(artifacts,'mobile.png')});
+ const overflow=await page.evaluate(()=>({width:innerWidth,scroll:document.documentElement.scrollWidth,elements:[...document.querySelectorAll('body *')].filter(e=>e.getBoundingClientRect().right>innerWidth+1).slice(0,12).map(e=>({tag:e.tagName,class:e.className,text:e.textContent.slice(0,70),right:e.getBoundingClientRect().right}))}));
+ console.log('Mobile geometry',JSON.stringify(overflow));
+ assert(overflow.scroll<=overflow.width,'App must not overflow on mobile');
  await page.setViewportSize({width:1000,height:650});
  await page.evaluate(()=>{
   const dialog=document.querySelector('.energy-history-dialog');dialog.showModal();
