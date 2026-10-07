@@ -4,6 +4,7 @@
   const BASE = "home/energy";
   const DISCOVERY_TOPICS = [
     `${BASE}/+/status`,
+    `${BASE}/+/health`,
     `${BASE}/+/state`,
     `${BASE}/+/admin/response`,
     `${BASE}/+/admin/csv`,
@@ -16,11 +17,11 @@
     path: "/mqtt"
   };
 
-  const APP_VERSION = "2.13";
+  const APP_VERSION = "2.14";
   const AUTO_REFRESH_MS = 60000;
   const OTA_ACK_TIMEOUT_MS = 12000;
   const OTA_POLL_MS = 5000;
-  const OTA_TOTAL_TIMEOUT_MS = 300000;
+  const OTA_TOTAL_TIMEOUT_MS = 180000;
   const OTA_PIN = "12134";
   const OTA_MANIFEST_BASE_URL = "https://raw.githubusercontent.com/ApostolosGit/ESP8266-OTA/main/";
   const OTA_RAW_BASE_URL = "https://raw.githubusercontent.com/ApostolosGit/ESP8266-OTA/main/";
@@ -299,7 +300,8 @@
         id,
         online: false,
         state: {},
-        lastReceived: null
+        lastReceived: null,
+        health: null, sampleReceived: false, stateError: "", statusOnline: null, responseTimer:null, responseTimedOut:false
       });
     }
     return devices.get(id);
@@ -515,9 +517,17 @@
   function renderDevice(device) {
     const hasState = device.state && Object.keys(device.state).length > 0;
     const state = device.state || {};
-    const body = hasState
-      ? (meterType(device) === "JSY" ? renderJsyBody(device) : renderDdsBody(device))
-      : '<div class="waiting-state">Αναμονή για την πρώτη μέτρηση…</div>';
+    const sensorFailed = device.health?.read_attempted === true && device.health.meter_ok === false;
+    const hasSample = device.sampleReceived || (!device.health && hasState);
+    const body = device.responseTimedOut
+      ? '<div class="meter-error"><strong>Ο ESP δεν απάντησε στο αίτημα ενημέρωσης.</strong><p>Η online ένδειξη μπορεί να είναι παλιά ή η σύνδεση προσωρινά μη διαθέσιμη. Οι άλλες συσκευές συνεχίζουν ανεξάρτητα.</p></div>'
+      : sensorFailed
+      ? `<div class="meter-error" role="status"><strong>Σφάλμα μετρητή ${escapeHtml(meterName(device))}</strong><p>Δεν λαμβάνονται έγκυρα δεδομένα από τον μετρητή. Έλεγξε τροφοδοσία, σύνδεση Modbus και διεύθυνση αισθητήρα. Ο ESP παραμένει συνδεδεμένος και επαναλαμβάνει τις αναγνώσεις.</p><p>${device.health.has_sample ? 'Υπάρχει προηγούμενη έγκυρη μέτρηση. Οι παλιές τιμές δεν εμφανίζονται ως τρέχουσες.' : 'Δεν έχει ληφθεί ακόμη έγκυρη μέτρηση.'}</p></div>`
+      : device.stateError
+        ? `<div class="meter-error"><strong>Μη έγκυρη ενημέρωση ${escapeHtml(device.id)}</strong><p>${escapeHtml(device.stateError)}</p></div>`
+        : hasSample
+          ? (meterType(device) === "JSY" ? renderJsyBody(device) : renderDdsBody(device))
+          : '<div class="waiting-state">Ο ESP είναι online. Αναμονή για τις πρώτες μετρήσεις…</div>';
 
     const last = device.lastReceived
       ? device.lastReceived.toLocaleTimeString("el-GR", { hour: "2-digit", minute: "2-digit", second: "2-digit" })
@@ -527,7 +537,7 @@
     const rssi = Number.isFinite(Number(state.rssi)) ? `${formatNumber(state.rssi, 0)} dBm` : "--";
 
     let totalPowerLine = "";
-    if (hasState && meterType(device) === "JSY") {
+    if (hasSample && !sensorFailed && !device.stateError && !device.responseTimedOut && meterType(device) === "JSY") {
       const totalPower = signedTotalPower(state);
       totalPowerLine = `
         <div class="device-total-power ${powerTone(totalPower)}">
@@ -541,7 +551,7 @@
       <article class="device-panel" data-device="${escapeHtml(device.id)}">
         <div class="device-head">
           <div class="device-title-wrap">
-            <span class="dot dot-good"></span>
+            <span class="dot ${sensorFailed || device.stateError || device.responseTimedOut ? "dot-warn" : "dot-good"}"></span>
             <div>
               <span class="device-id">${escapeHtml(device.id)}</span>
               <div class="device-title-line">
@@ -562,7 +572,7 @@
         </div>
         ${body}
         <div class="device-footer">
-          <span>ONLINE</span>
+          <span>${sensorFailed ? "ESP ONLINE · ΣΦΑΛΜΑ ΜΕΤΡΗΤΗ" : "ESP ONLINE"}</span>
           <span>Τελευταία λήψη: ${last}</span>
         </div>
       </article>`;
@@ -574,7 +584,13 @@
       .sort((a, b) => a.id.localeCompare(b.id));
 
     ui.emptyState.classList.toggle("hidden", online.length > 0);
-    ui.devicesGrid.innerHTML = online.map(renderDevice).join("");
+    ui.devicesGrid.innerHTML = online.map(device => {
+      try { return renderDevice(device); }
+      catch (error) {
+        console.error("Device render failed", device.id, error);
+        return `<article class="device-panel meter-error"><strong>${escapeHtml(device.id)}</strong><p>Αδυναμία εμφάνισης δεδομένων αυτής της συσκευής. Οι υπόλοιπες συνεχίζουν κανονικά.</p></article>`;
+      }
+    }).join("");
     ui.metersStatus.textContent = String(online.length);
     setDot(ui.metersDot, online.length ? "good" : "muted");
     ui.updateAllBtn.disabled = !(client && client.connected) || online.length === 0;
@@ -594,9 +610,16 @@
   }
 
   function requestUpdate(id, manual = true) {
+    const device = ensureDevice(id);
+    clearTimeout(device.responseTimer);
+    device.responseTimedOut = false;
     if (!publish(id, "request", "update", (err) => {
       if (err && manual) showToast(`Αποτυχία update ${id}`);
     })) return;
+    device.responseTimer = setTimeout(() => {
+      device.responseTimer = null; device.responseTimedOut = true;
+      renderAll();
+    }, 10000);
     if (manual) showToast(`Ζητήθηκε νέα μέτρηση: ${id}`, 1500);
   }
 
@@ -606,7 +629,10 @@
       if (manual) showToast("Δεν υπάρχει online μετρητής");
       return;
     }
-    ids.forEach((id) => requestUpdate(id, false));
+    ids.forEach(id => {
+      try { requestUpdate(id, false); }
+      catch (error) { console.error("Update request failed", id, error); }
+    });
     if (manual) showToast(`Ζητήθηκε update σε ${ids.length} μετρητές`);
     scheduleAutoRefresh();
   }
@@ -919,7 +945,8 @@
       startedAt: Date.now(),
       sawOffline: false,
       sawOnlineAfterStart: false,
-      ack: responseData
+      ack: responseData,
+      knownDeviceIds: new Set(devices.keys())
     };
 
     if (ui.adminDialog.open) ui.adminDialog.close();
@@ -948,7 +975,7 @@
       const device = devices.get(id);
       const lastFw = device ? String((device.state || {}).firmware || "?") : "?";
       failActiveOta(
-        "Δεν επιβεβαιώθηκε η νέα έκδοση μέσα σε 5 λεπτά.",
+        "Δεν επιβεβαιώθηκε η νέα έκδοση μέσα σε 3 λεπτά.",
         `Τελευταία γνωστή έκδοση: ${lastFw}. Έλεγξε OLED / Recovery / MQTT.`
       );
     }, OTA_TOTAL_TIMEOUT_MS);
@@ -1969,8 +1996,8 @@
     const part=t=>parts.find(p=>p.type===t).value;
     const today=Math.floor(Date.UTC(+part('year'),+part('month')-1,+part('day'))/86400000);
     const groups=h.range===24 ? EnergyHistory.intervals(rows) : EnergyHistory.daily(rows,h.range,today);
-    $('energyHistoryPlot').innerHTML=groups.length ? (dual ? '<p class="history-legend">🔵 Ζ1 · 🟣 Ζ2 νύχτας · 🟢 Ζ2 μεσημεριού</p>' : '')+EnergyHistory.svg(groups,dual) : '<p>Δεν υπάρχουν ακόμη αρκετές μετρήσεις για γράφημα.</p>';
-    const names=dual?['Ζ1','Ζ2 νύχτας','Ζ2 μεσημεριού']:['Ζ'];
+    $('energyHistoryPlot').innerHTML=groups.length ? (dual ? '<p class="history-legend">🔵 Ζ1 · 🟢 Ζ2 μεσημεριού · 🟣 Ζ2 νύχτας</p>' : '')+EnergyHistory.svg(groups,dual) : '<p>Δεν υπάρχουν ακόμη αρκετές μετρήσεις για γράφημα.</p>';
+    const names=dual?['Ζ1','Ζ2 μεσημεριού','Ζ2 νύχτας']:['Ζ'];
     $('energyHistoryTable').innerHTML=`<div class="history-table-wrap"><table class="utility-history-table"><thead><tr><th>Περίοδος</th>${names.map(n=>`<th>${n} kWh</th>`).join('')}<th>Καταγραφή</th></tr></thead><tbody>${groups.map(g=>{
       const vs=g.values ? (dual ? g.values : [g.values.reduce((a,b)=>a+b,0)]) : null;
       const flags=g.flags; const status=flags&32?'Χωρίς δεδομένα':[(flags&16?'Τρέχουσα':''),(flags&1?'Μερική':''),(flags&2?'Εκτιμώμενη κατανομή':''),(flags&4?'Επαναφορά μετρητή':''),(flags&8?'Σφάλμα αποθήκευσης':'')].filter(Boolean).join(' · ')||'Καταγεγραμμένη';
@@ -2041,6 +2068,74 @@
     }
   }
 
+  function confirmOtaFromHealth(device) {
+    const session = otaSession;
+    if (!session || !device.health || compareFirmwareVersions(device.health.firmware, session.targetVersion) !== 0) return;
+    if (device.id === session.id) { completeActiveOta(device.health.firmware); return; }
+    // One-time transition from the old shared profile topic to hardware identity.
+    const suffix = device.id.startsWith(session.id + "-") ? device.id.slice(session.id.length + 1) : "";
+    if (!/^[0-9A-F]{12}$/i.test(suffix) || session.knownDeviceIds?.has(device.id) ||
+        !otaManifestMatchesDevice(session.manifest, device)) return;
+    clearOtaSessionTimers();
+    otaSession = null;
+    setOtaProgressUi("success", `Firmware ${device.health.firmware} εντοπίστηκε στο νέο ID ${device.id}.`,
+      `Το παλιό ID ${session.id} ήταν κοινό ανά τύπο firmware. Η νέα συσκευή εμφανίζεται ανεξάρτητα στον πίνακα. Αν υπήρχαν πολλοί ESP με το παλιό ίδιο ID, έλεγξε τις νέες εγγραφές για κάθε site.`);
+    showToast(`Νέο DEVICE_ID: ${device.id}`, 8000);
+  }
+
+  function receiveDeviceHealth(device, text, retained = false) {
+    let health;
+    try {
+      health = JSON.parse(text);
+      if (!health || Array.isArray(health) || typeof health !== "object" ||
+          typeof health.meter_ok !== "boolean" || typeof health.meter !== "string" ||
+          typeof health.firmware !== "string" || typeof health.read_attempted !== "boolean") throw new Error("Invalid health frame");
+    } catch (error) { console.warn("Invalid health frame", device.id, error); return false; }
+    if (device.health?.chip_id && health.chip_id && device.health.chip_id !== health.chip_id)
+      showToast(`Πιθανή σύγκρουση DEVICE_ID ${device.id}: διαφορετικοί ESP χρησιμοποιούν το ίδιο ID.`, 8000);
+    clearTimeout(device.responseTimer); device.responseTimer = null; device.responseTimedOut = false;
+    device.health = health;
+    device.state = { ...(device.state || {}), meter:health.meter, firmware:health.firmware, rssi:health.rssi, dual_zone:health.dual_zone };
+    if (!retained || device.statusOnline !== false) device.online = true;
+    renderAll();
+    return true;
+  }
+
+  function receiveDeviceState(device, text) {
+    try {
+      const state = JSON.parse(text);
+      if (!state || Array.isArray(state) || typeof state !== "object") throw new Error("Expected a device object");
+      clearTimeout(device.responseTimer); device.responseTimer = null; device.responseTimedOut = false;
+      device.state = state;
+      device.stateError = "";
+      device.sampleReceived = true;
+      device.lastReceived = new Date();
+      device.online = true;
+      if (device.health) device.health = {...device.health, meter_ok:true, read_attempted:true, has_sample:true};
+    } catch (error) {
+      device.stateError = "Η απάντηση μετρήσεων δεν είναι έγκυρο αντικείμενο JSON. Αναμονή νέας ενημέρωσης.";
+      console.warn("Invalid meter JSON", device.id, error);
+      renderAll();
+      return false;
+    }
+    renderAll();
+    return true;
+  }
+
+  const MQTT_SESSION_KEY = "energy.mqtt.tab-session";
+  function readMqttSession() {
+    try {
+      const saved = JSON.parse(sessionStorage.getItem(MQTT_SESSION_KEY) || "null");
+      return saved && ["host","port","path","username","password"].every(key => typeof saved[key] === "string" && saved[key].length > 0) ? saved : null;
+    } catch (_) { return null; }
+  }
+  function writeMqttSession(settings) {
+    try { sessionStorage.setItem(MQTT_SESSION_KEY, JSON.stringify(settings)); } catch (_) {}
+  }
+  function clearMqttSession() {
+    try { sessionStorage.removeItem(MQTT_SESSION_KEY); } catch (_) {}
+  }
+
   function restoreSettings() {
     ui.hostInput.value = localStorage.getItem("energy.host") || ui.hostInput.value || DEFAULTS.host;
     ui.portInput.value = localStorage.getItem("energy.port") || DEFAULTS.port;
@@ -2057,12 +2152,14 @@
   }
 
   function disconnect(showMessage = true) {
+    if (showMessage) clearMqttSession();
     clearInterval(autoRefreshTimer);
     autoRefreshTimer = null;
     if (client) {
       try { client.end(true); } catch (_) {}
     }
     client = null;
+    devices.forEach(device => clearTimeout(device.responseTimer));
     devices.clear();
     renderAll();
     setBrokerState("warn", "Αποσυνδεδεμένο");
@@ -2099,13 +2196,13 @@
 
     newClient.on("connect", () => {
       if (client !== newClient) return;
+      writeMqttSession(settings);
       setBrokerState("good", "Συνδεδεμένο");
       showConnectionError();
 
-      newClient.subscribe(DISCOVERY_TOPICS, { qos: 0 }, (err) => {
-        if (err) {
-          showToast(`Σφάλμα subscribe: ${err.message || err}`);
-          return;
+      newClient.subscribe(DISCOVERY_TOPICS, { qos: 0 }, (err, grants = []) => {
+        if (err || grants.some(grant => grant.qos === 128)) {
+          showToast("Ο broker δεν επέτρεψε όλες τις συνδρομές discovery. Οι επιτρεπόμενες συσκευές συνεχίζουν.", 8000);
         }
         showToast("Συνδέθηκε στο HiveMQ · discovery ενεργό");
         scheduleAutoRefresh();
@@ -2124,9 +2221,14 @@
       if (client !== newClient) return;
       setBrokerState("bad", "Σφάλμα");
       showConnectionError(`MQTT: ${err.message || err}`);
+      if (/not authorized|bad user|bad username|bad password/i.test(String(err.message || err))) {
+        clearMqttSession();
+        newClient.end(true); // A rejected login needs corrected credentials, not endless retries.
+        if (!ui.settingsDialog.open) ui.settingsDialog.showModal();
+      }
     });
 
-    newClient.on("message", (topic, payload) => {
+    newClient.on("message", (topic, payload, packet = {}) => {
       if (client !== newClient) return;
       const parsed = parseTopic(topic);
       if (!parsed) return;
@@ -2134,8 +2236,13 @@
       const text = payload.toString();
       const device = ensureDevice(parsed.id);
 
+      if (parsed.suffix === "health") {
+        if (receiveDeviceHealth(device, text, packet.retain === true)) confirmOtaFromHealth(device);
+        return;
+      }
       if (parsed.suffix === "status") {
         device.online = text.trim().toLowerCase() === "online";
+        device.statusOnline = device.online;
         renderAll();
 
         if (otaSession && otaSession.id === device.id) {
@@ -2153,7 +2260,7 @@
           }
         }
 
-        if (device.online && (!device.state || !Object.keys(device.state).length)) {
+        if (device.online && !device.sampleReceived && !device.responseTimer) {
           setTimeout(() => requestUpdate(device.id, false), 100);
         }
         return;
@@ -2161,10 +2268,7 @@
 
       if (parsed.suffix === "state") {
         try {
-          device.state = JSON.parse(text);
-          device.lastReceived = new Date();
-          device.online = true;
-          renderAll();
+          if (!receiveDeviceState(device, text)) return;
 
           if (otaSession && otaSession.id === device.id) {
             const currentFw = String((device.state || {}).firmware || "?");
@@ -2485,11 +2589,11 @@
     navigator.serviceWorker.addEventListener("controllerchange", () => {
       if (!hadServiceWorkerController || reloadingForAppUpdate) return;
       reloadingForAppUpdate = true;
-      window.location.reload();
+      showToast("Νέα έκδοση app διαθέσιμη. Θα εφαρμοστεί με την επόμενη φόρτωση· η τρέχουσα σύνδεση συνεχίζεται.", 8000);
     });
 
     window.addEventListener("load", () => {
-      navigator.serviceWorker.register("./sw.js?v=2.0.13", { updateViaCache: "none" })
+      navigator.serviceWorker.register("./sw.js?v=2.0.14", { updateViaCache: "none" })
         .then((registration) => {
           const checkForAppUpdate = () => {
             registration.update().catch((err) => {
@@ -2520,6 +2624,15 @@
   restoreSettings();
   renderAll();
   setBrokerState("warn", "Αποσυνδεδεμένο");
-  setTimeout(() => ui.settingsDialog.showModal(), 250);
+  const resumedMqttSession = readMqttSession();
+  if (resumedMqttSession) {
+    ui.hostInput.value = resumedMqttSession.host;
+    ui.portInput.value = resumedMqttSession.port;
+    ui.pathInput.value = resumedMqttSession.path;
+    ui.usernameInput.value = resumedMqttSession.username;
+    ui.passwordInput.value = resumedMqttSession.password;
+    // Reconnect with the successful tab-bound values, not browser autofill.
+    connect(resumedMqttSession);
+  } else setTimeout(() => ui.settingsDialog.showModal(), 250);
 })();
 

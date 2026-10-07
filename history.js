@@ -9,7 +9,7 @@ window.EnergyHistory = (() => {
     const byDay = new Map(rows.map(r => [r.day, r]));
     return Array.from({length:days}, (_, i) => {
       const day = today - days + 1 + i, row = byDay.get(day);
-      return {label:dayLabel(day), values:row ? [0,2,4].map(j => (row.wh[j]-row.wh[j+1])/1000) : null,
+      return {label:dayLabel(day), values:row ? [0,4,2].map(j => (row.wh[j]-row.wh[j+1])/1000) : null,
         flags:row?.flags ?? 32, detail:row ? `${local(row.first)} έως ${local(row.last)} · ${Math.round(row.covered/60)} λεπτά καταγραφής` : 'Δεν υπάρχει καταγραφή'};
     });
   }
@@ -25,7 +25,7 @@ window.EnergyHistory = (() => {
     });
   }
   function svg(groups, dual) {
-    const colors=dual ? ['#548ae8','#9066d8','#16a58a'] : ['#548ae8'];
+    const colors=dual ? ['#548ae8','#16a58a','#9066d8'] : ['#548ae8'];
     const width=Math.max(650,groups.length*(dual?38:18)+80), height=300, top=25, bottom=250;
     const values=groups.flatMap(g=>g.values ? (dual ? g.values : [g.values.reduce((a,b)=>a+b,0)]) : []);
     const max=Math.max(0,...values), min=Math.min(0,...values), range=max-min || 1;
@@ -37,7 +37,7 @@ window.EnergyHistory = (() => {
       if(!vs) out+=`<text x="${x+step/2}" y="${zero-5}" text-anchor="middle" fill="#7a8b95" font-size="13">×</text>`;
       else vs.forEach((v,j)=>{
         const bw=(step-5)/vs.length, yy=y(v), bh=Math.max(v===0?1:2,Math.abs(yy-zero));
-        out+=`<rect x="${x+j*bw+2}" y="${v>=0 ? yy : zero}" width="${Math.max(1,bw-1)}" height="${bh}" fill="${colors[j]}" opacity="${g.flags?'.55':'1'}"><title>${g.label} · ${dual?['Ζ1','Ζ2 νύχτας','Ζ2 μεσημεριού'][j]:'Ζ'}: ${number(v)} kWh</title></rect>`;
+        out+=`<rect x="${x+j*bw+2}" y="${v>=0 ? yy : zero}" width="${Math.max(1,bw-1)}" height="${bh}" fill="${colors[j]}" opacity="${g.flags?'.55':'1'}"><title>${g.label} · ${dual?['Ζ1','Ζ2 μεσημεριού','Ζ2 νύχτας'][j]:'Ζ'}: ${number(v)} kWh</title></rect>`;
       });
       if(groups.length<=30 || i%4===0) out+=`<text x="${x+step/2}" y="275" text-anchor="middle" fill="#526576" font-size="10">${g.label}</text>`;
     });

@@ -71,7 +71,7 @@ for (const [, asset] of html.matchAll(/(?:src|href)="((?:app\.js|style\.css)[^"]
 }
 await lifecycle("activate");
 assert.deepEqual(deleted, ["energy-dds-jsy-pwa-v2.0.7", "energy-dds-jsy-pwa-v2.0.8-r2"]);
-assert.deepEqual(navigated, [base]);
+assert.deepEqual(navigated, []); // Updates must not terminate active MQTT sessions.
 const asset = html.match(/src="(app\.js[^"]+)"/)[1];
 assert.equal(await (await request(asset)).text(), "fresh");
 assert.equal(fetchOptions.at(-1).cache, "no-store");
@@ -114,3 +114,4 @@ const redirect = new URL(redirected[0], base);
 assert.equal(redirect.searchParams.get("app"), appVersion);
 assert.match(redirect.searchParams.get("reset"), /^\d+$/);
 console.log("PWA fresh assets, current-cache offline fallback, scoped cleanup and recovery PASS");
+

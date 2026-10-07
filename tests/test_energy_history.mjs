@@ -7,7 +7,7 @@ const ROOT=dirname(fileURLToPath(import.meta.url));
 const root=ROOT.endsWith('/tests') ? resolve(ROOT,'..') : ROOT;
 const context={window:{},Date,Intl,Map,Number,Math};vm.createContext(context);vm.runInContext(fs.readFileSync(resolve(root,'history.js'),'utf8'),context);const H=context.window.EnergyHistory;
 const days=H.daily([{day:20000,wh:[1000,2000,3000,500,500,1500],flags:1,covered:60,first:1700000000,last:1700000060}],3,20000);
-assert.equal(days.length,3);assert.equal(days[0].values,null);assert.equal(days[2].values[0],-1);assert.equal(days[2].values[1],2.5);assert.equal(days[2].values[2],-1);
+assert.equal(days.length,3);assert.equal(days[0].values,null);assert.equal(days[2].values[0],-1);assert.equal(days[2].values[1],-1);assert.equal(days[2].values[2],2.5);
 let chart=H.svg(days,true);assert.equal((chart.match(/<rect /g)||[]).length,3);assert(chart.includes('Ζ2 νύχτας'));assert(chart.includes('Ζ2 μεσημεριού'));assert.equal((H.svg(days,false).match(/<rect /g)||[]).length,1);
 const interval=H.intervals([{epoch:1700000000,generation:1,import:1000,export:1000},{epoch:1700001800,generation:1,import:2000,export:3500},{epoch:1700003600,generation:2,import:2100,export:3500}]);assert.equal(interval[0].values[0],-1.5);assert.equal(interval[1].values,null);
 const dup=H.intervals([{epoch:1000,generation:1,import:1,export:0},{epoch:1000,generation:1,import:1,export:0}]);assert.equal(dup.length,0);
@@ -29,5 +29,5 @@ token=packets.at(-1).split('|')[1];feed(`B|${token}|1|1700000000|2072576|100000|
 assert($('energyHistoryMemory').textContent.includes('1972576'));assert($('energyHistoryPlot').innerHTML.includes('<svg'));assert($('energyHistoryTable').innerHTML.includes('Χωρίς δεδομένα'));
 // A missing packet retries the same offset, rather than claiming completion.
 context.loadEnergyHistory('test');token=packets.at(-1).split('|')[1];feed(`B|${token}|1|1700000000|2072576|100000|1972576|4000|3000|2000|0|1791302400`);feed(`E|${token}|-1|1`);assert.equal(packets.at(-1).split('|').at(-1),'0');assert.equal(context.historySession.retry,1);
-assert(code.includes('`${BASE}/+/admin/history`'));assert(fs.readFileSync(resolve(root,'sw.js'),'utf8').includes('./history.js?v=2.0.13'));assert(fs.readFileSync(resolve(root,'index.html'),'utf8').indexOf('history.js')<fs.readFileSync(resolve(root,'index.html'),'utf8').indexOf('app.js'));
+assert(code.includes('`${BASE}/+/admin/history`'));assert(fs.readFileSync(resolve(root,'sw.js'),'utf8').includes('./history.js?v=2.0.14'));assert(fs.readFileSync(resolve(root,'index.html'),'utf8').indexOf('history.js')<fs.readFileSync(resolve(root,'index.html'),'utf8').indexOf('app.js'));
 console.log('App V5 charts: three zones, signed net, missing days, mono mode, reset/gap handling, MQTT paging, stale frames, missing packet retry and precache PASS');
